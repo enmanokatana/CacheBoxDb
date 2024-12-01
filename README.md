@@ -12,7 +12,8 @@ A lightweight, multi-type key-value database implemented in Java with file-based
 - 📝 Human-readable storage format
 - 💻 Interactive command-line interface
 - 🧵 Thread-safe operations
-- 🔍 Type verification and validation
+- 🔍 Advanced search and query capabilities
+- 🧪 Type verification and validation
 
 ## Quick Start
 
@@ -24,14 +25,14 @@ CacheBox db = new CacheBox("mydata.cbx");
 db.put("name", CacheValue.of("John Doe"));          // String
 db.put("age", CacheValue.of(30));                   // Integer
 db.put("active", CacheValue.of(true));              // Boolean
-db.put("tags", CacheValue.of(Arrays.asList("a","b"))); // List
+db.put("tags", CacheValue.of(Arrays.asList("a", "b"))); // List
 ```
 
 ## Command Line Interface
 
 ```bash
 $ java CacheBox
-CacheBox v1.0
+CacheBox v1.1
 Type 'help' for available commands
 
 cbox> help
@@ -43,12 +44,32 @@ put <type> <key> <value> - Store a value of specified type
   Example: put int age 25
   Example: put bool active true
   Example: put list colors red,blue,green
+
 get <key> - Retrieve a value by key
 delete <key> - Delete a key-value pair
 list - Show all stored key-value pairs
 type <key> - Show the type of a stored value
+search [options] - Search and filter stored data
+  Options:
+    -pattern <regex>   Search by pattern
+    -range <min> <max> Search by numeric range
+    -type <type>       Filter by type (string, int, bool, list)
 help - Show this help message
 exit - Exit the program
+```
+
+## Search Functionality
+
+The new search command allows users to perform advanced queries on the stored data:
+- `-pattern <regex>`: Match keys or values using a regular expression.
+- `-range <min> <max>`: Search for numeric values within a specified range.
+- `-type <type>`: Filter results by data type (e.g., `string`, `int`, `bool`, `list`).
+
+### Example Commands
+```bash
+cbox> search -pattern "na.*"
+cbox> search -range 10 50
+cbox> search -type string
 ```
 
 ## Data Types Support
@@ -72,12 +93,6 @@ colors=LIST:red,blue,green
 ```
 
 ## Roadmap
-
-### Coming in v1.1
-- Search & Query Features
-  - Pattern matching
-  - Range queries
-  - Type filtering
 
 ### Coming in v1.2
 - Data Validation & Constraints
@@ -108,20 +123,25 @@ colors=LIST:red,blue,green
 
 ## Best Practices
 
-1. Key Naming
+1. **Key Naming**
    - Use consistent naming conventions
    - Avoid special characters
    - Keep keys readable and meaningful
 
-2. Data Types
+2. **Data Types**
    - Use appropriate types for values
    - Consider using lists for related data
    - Handle null values explicitly
 
-3. Operations
+3. **Operations**
    - Check value types before operations
    - Handle exceptions appropriately
    - Regular backups of data files
+
+4. **Search Queries**
+   - Use patterns to filter text-based data
+   - Specify ranges for numeric searches
+   - Leverage type filtering for structured data
 
 ## Contributing
 
@@ -139,13 +159,18 @@ MIT License - feel free to use this in your own projects!
 
 ## Version History
 
-- 1.0 (Current)
+- **1.1 (Current)**
+  - Added advanced search and query capabilities
+  - Pattern matching, range queries, and type filtering
+  - Updated CLI to include search options
+
+- **1.0**
   - Multi-type support (String, Integer, Boolean, List)
   - Enhanced CLI with type commands
   - Improved error handling
   - Type-aware storage format
 
-- 0.1 (Initial Release)
+- **0.1 (Initial Release)**
   - Basic CRUD operations
   - String-only support
   - Simple CLI
@@ -156,4 +181,4 @@ MIT License - feel free to use this in your own projects!
 For issues, questions, or contributions, please open an issue in the repository.
 
 ---
-Made with ☕ by developers, for developers
+Made with ☕ by developers, for developers!
