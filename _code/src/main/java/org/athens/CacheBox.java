@@ -119,5 +119,47 @@ public class CacheBox {
                 CacheValidation.ValidationRule.forKey("email", String.class)
                         .matchPattern("^[A-Za-z0-9+_.-]+@(.+)$")
         );
+    public Map<String, CacheValue> search(CacheQuery query) {
+        Map<String, CacheValue> results = new HashMap<>();
+
+        for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
+            if (matchesQuery(entry.getKey(), entry.getValue(), query)) {
+                results.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        return results;
+    }
+
+    private boolean matchesQuery(String key, CacheValue value, CacheQuery query) {
+        // Type filter
+        if (query.getTypeFilter() != null && value.getType() != query.getTypeFilter()) {
+            return false;
+        }
+
+        // Pattern matching for key or string value
+        if (query.getPattern() != null) {
+            if (key.matches(query.getPattern())) {
+                return true;
+            }
+            if (value.getType() == CacheValue.Type.STRING &&
+                    value.getValue().toString().matches(query.getPattern())) {
+                return true;
+            }
+        }
+
+        // Range queries for integer values
+        if (value.getType() == CacheValue.Type.INTEGER) {
+            Integer intValue = (Integer) value.getValue();
+            if (query.getMinValue() != null && intValue < query.getMinValue()) {
+                return false;
+            }
+            if (query.getMaxValue() != null && intValue > query.getMaxValue()) {
+                return false;
+            }
+        }
+
+        return query.getPattern() == null && query.getMinValue() == null &&
+                query.getMaxValue() == null && query.getTypeFilter() == null;
     }
 }
