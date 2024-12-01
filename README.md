@@ -1,3 +1,7 @@
+Here's the updated README file with the added **Data Validation & Constraints** section:
+
+---
+
 # CacheBox
 
 A lightweight, multi-type key-value database implemented in Java with file-based persistence and an interactive CLI.
@@ -14,6 +18,7 @@ A lightweight, multi-type key-value database implemented in Java with file-based
 - 🧵 Thread-safe operations
 - 🔍 Advanced search and query capabilities
 - 🧪 Type verification and validation
+- ✅ Data Validation & Constraints (v1.2)
 
 ## Quick Start
 
@@ -80,6 +85,51 @@ Currently supported types:
 - Boolean: true/false values
 - List: Comma-separated values
 - Null: Explicit null values
+
+## Data Validation & Constraints (v1.2)
+
+### Validation Rules
+- **Required Fields**: You can mark specific keys as required, ensuring that the value for that key must be provided when stored.
+- **Type Validation**: CacheBox ensures that the value's type matches the type specified for that key (e.g., a string cannot be stored as an integer).
+- **Custom Validation Rules**: You can add custom validation rules such as checking the value against specific constraints (e.g., numerical ranges, regex patterns).
+
+### Example Usage
+```java
+// Create the validation rules
+ValidationRule<Integer> ageRule = ValidationRule.forKey("age", Integer.class)
+    .required()
+    .addValidator(value -> value >= 0 && value <= 120);
+
+ValidationRule<String> nameRule = ValidationRule.forKey("name", String.class)
+    .required()
+    .addValidator(value -> value.length() > 1);
+
+// Add rules to the manager
+ValidationManager validationManager = new ValidationManager();
+validationManager.addRule(ageRule);
+validationManager.addRule(nameRule);
+
+// Example cache value to validate
+CacheValue ageValue = CacheValue.of(25);
+CacheValue nameValue = CacheValue.of("John Doe");
+
+// Validate for a specific key
+ValidationResult ageValidationResult = validationManager.validate("age", ageValue);
+ValidationResult nameValidationResult = validationManager.validate("name", nameValue);
+
+// Process validation results
+if (!ageValidationResult.isValid()) {
+    System.out.println(ageValidationResult.getErrorMessage());
+}
+if (!nameValidationResult.isValid()) {
+    System.out.println(nameValidationResult.getErrorMessage());
+}
+```
+
+### How It Works:
+- Validation rules can be added for specific keys, and CacheBox will validate data before storing it.
+- Custom validation logic can be applied through predicates for various use cases.
+- Validation is only triggered for the keys with associated rules, ensuring that your data is validated correctly.
 
 ## Storage Format
 
@@ -182,3 +232,5 @@ For issues, questions, or contributions, please open an issue in the repository.
 
 ---
 Made with ☕ by developers, for developers!
+
+---
