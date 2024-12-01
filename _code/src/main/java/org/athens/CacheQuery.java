@@ -28,8 +28,10 @@ public class CacheQuery {
         }
 
         public CacheQuery build() {
-            return new CacheQuery(this);
-        }
+            if (pattern == null && typeFilter == null) {
+                throw new IllegalArgumentException("Pattern or TypeFilter must be provided");
+            }
+            return new CacheQuery(this);        }
     }
     private CacheQuery(Builder builder) {
         this.pattern = builder.pattern;

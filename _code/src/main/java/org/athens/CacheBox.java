@@ -93,6 +93,7 @@ public class CacheBox {
         System.out.println("delete <key> - Delete a key-value pair");
         System.out.println("list - Show all stored key-value pairs");
         System.out.println("type <key> - Show the type of a stored value");
+        System.out.println("search - Show search options");
         System.out.println("help - Show this help message");
         System.out.println("exit - Exit the program\n");
     }
