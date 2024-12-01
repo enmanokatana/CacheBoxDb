@@ -5,6 +5,54 @@ import java.util.Map;
 import java.util.Scanner;
 
 public class Main {
+    private static void processSearchCommand(String[] args, CacheBox db) {
+        if (args.length < 2) {
+            System.out.println("Usage: search [options]");
+            System.out.println("Options:");
+            System.out.println("  -pattern <regex>   Search by pattern");
+            System.out.println("  -range <min> <max> Search by number range");
+            System.out.println("  -type <type>       Filter by type (string/int/bool/list)");
+            return;
+        }
+
+        CacheQuery.Builder queryBuilder = new CacheQuery.Builder();
+
+        for (int i = 1; i < args.length; i++) {
+            switch (args[i]) {
+                case "-pattern":
+                    if (i + 1 < args.length) {
+                        queryBuilder.withPattern(args[++i]);
+                    }
+                    break;
+                case "-range":
+                    if (i + 2 < args.length) {
+                        queryBuilder.withRange(
+                                Integer.parseInt(args[++i]),
+                                Integer.parseInt(args[++i])
+                        );
+                    }
+                    break;
+                case "-type":
+                    if (i + 1 < args.length) {
+                        queryBuilder.withType(CacheValue.Type.valueOf(
+                                args[++i].toUpperCase()
+                        ));
+                    }
+                    break;
+            }
+        }
+
+        Map<String, CacheValue> results = db.search(queryBuilder.build());
+
+        if (results.isEmpty()) {
+            System.out.println("No matches found.");
+        } else {
+            System.out.println("Search results:");
+            results.forEach((key, value) ->
+                    System.out.printf("%s = %s%n", key, value.getValue())
+            );
+        }
+    }
     public static void main(String[] args) {
         CacheBox db = new CacheBox("cachebox.cbx");
         Scanner scanner = new Scanner(System.in);
@@ -15,7 +63,7 @@ public class Main {
         while (true) {
             System.out.print("\ncbox> ");
             String input = scanner.nextLine().trim();
-            String[] parts = input.split("\\s+", 4);
+            String[] parts = input.split("\\s+");
 
             if (parts.length == 0 || parts[0].isEmpty()) {
                 continue;
@@ -40,7 +88,7 @@ public class Main {
                         }
                         String type = parts[1].toLowerCase();
                         String key = parts[2];
-                        String value = parts[3];
+                        String value = input.substring(input.indexOf(parts[3])); // Handle spaces in value
 
                         switch (type) {
                             case "string":
@@ -114,6 +162,10 @@ public class Main {
                         }
                         break;
 
+                    case "search":
+                        processSearchCommand(parts, db);
+                        break;
+
                     default:
                         System.out.println("Unknown command. Type 'help' for available commands");
                 }
@@ -121,6 +173,5 @@ public class Main {
                 System.out.println("Error: " + e.getMessage());
             }
         }
-
     }
 }
