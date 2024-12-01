@@ -8,20 +8,32 @@ import java.util.List;
 import java.util.Map;
 
 public class CacheBox {
-    public Map<String, CacheValue> getStore() {
-        return store;
-    }
 
     private Map<String, CacheValue> store;
     private final String dbFile;
 
+    private final CacheValidation.ValidationManager validationManager;
+
+
+
     public CacheBox(String filename) {
+        this.validationManager = new CacheValidation.ValidationManager();
+        setupDefaultValidationRules();
+
         this.dbFile = filename;
         this.store = new HashMap<>();
         loadFromDisk();
+
     }
 
     public void put(String key, CacheValue value) {
+        CacheValidation.ValidationResult result = validationManager.validate(key, value);
+        if (!result.isValid()) {
+            throw new ValidationException(
+                    "Validation failed for key '" + key + "': " +
+                            result.getErrorMessage()
+            );
+        }
         store.put(key, value);
         saveToDisk();
     }
@@ -84,6 +96,29 @@ public class CacheBox {
         System.out.println("help - Show this help message");
         System.out.println("exit - Exit the program\n");
     }
+    public Map<String, CacheValue> getStore() {
+        return store;
+    }
+
+    private void setupDefaultValidationRules() {
+        // Example validation rules
+        validationManager.addRule(
+                CacheValidation.ValidationRule.forKey("name", String.class)
+                        .required()
+                        .lengthBetween(2, 50)
+        );
+
+        validationManager.addRule(
+                CacheValidation.ValidationRule.forKey("age", Integer.class)
+                        .required()
+                        .validate(age -> age >= 0)
+                        .rangeBetween(0, 120)
+        );
+
+        validationManager.addRule(
+                CacheValidation.ValidationRule.forKey("email", String.class)
+                        .matchPattern("^[A-Za-z0-9+_.-]+@(.+)$")
+        );
     public Map<String, CacheValue> search(CacheQuery query) {
         Map<String, CacheValue> results = new HashMap<>();
 
