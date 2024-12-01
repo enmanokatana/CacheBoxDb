@@ -119,6 +119,7 @@ public class CacheBox {
                 CacheValidation.ValidationRule.forKey("email", String.class)
                         .matchPattern("^[A-Za-z0-9+_.-]+@(.+)$")
         );
+    }
     public Map<String, CacheValue> search(CacheQuery query) {
         Map<String, CacheValue> results = new HashMap<>();
 
