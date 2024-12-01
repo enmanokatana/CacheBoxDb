@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 
 public class CacheValue implements Serializable {
-    private enum Type {
+    public enum Type {
         STRING,
         INTEGER,
         BOOLEAN,
@@ -91,4 +91,9 @@ public class CacheValue implements Serializable {
             default: throw new IllegalStateException("Unknown type: " + type);
         }
     }
+
+    public Object getValue() {
+        return value;
+    }
+
 }
