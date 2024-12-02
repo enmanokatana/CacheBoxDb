@@ -1,10 +1,10 @@
 package org.athens;
 
 public class CacheQuery {
-    private String pattern;
-    private Integer minValue;
-    private  Integer maxValue;
-    private CacheValue.Type typeFilter;
+    private final String pattern;
+    private final Integer minValue;
+    private  final Integer maxValue;
+    private final CacheValue.Type typeFilter;
 
     public static class Builder{
         private String pattern;
