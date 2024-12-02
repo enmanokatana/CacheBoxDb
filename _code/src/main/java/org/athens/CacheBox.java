@@ -1,130 +1,107 @@
 package org.athens;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class CacheBox {
+    private final Map<String, CacheValue> globalStore;
+    private final Storage storage;
+    private final TransactionManager transactionManager;
 
-    private Map<String, CacheValue> store;
-    private final String dbFile;
-
-    private final CacheValidation.ValidationManager validationManager;
-
-
-
-    public CacheBox(String filename) {
-        this.validationManager = new CacheValidation.ValidationManager();
-        setupDefaultValidationRules();
-
-        this.dbFile = filename;
-        this.store = new HashMap<>();
-        loadFromDisk();
-
+    public CacheBox(String dbFile) {
+        this.storage = new Storage(dbFile);
+        this.globalStore = storage.loadFromDisk();
+        this.transactionManager = new TransactionManager(globalStore);
     }
 
     public void put(String key, CacheValue value) {
-        CacheValidation.ValidationResult result = validationManager.validate(key, value);
-        if (!result.isValid()) {
-            throw new ValidationException(
-                    "Validation failed for key '" + key + "': " +
-                            result.getErrorMessage()
-            );
-        }
-        store.put(key, value);
-        saveToDisk();
+        transactionManager.getActiveTransaction().put(key, value);
     }
 
     public CacheValue get(String key) {
-        return store.get(key);
+        return transactionManager.getActiveTransaction().get(key);
     }
 
     public void delete(String key) {
-        store.remove(key);
-        saveToDisk();
+        transactionManager.getActiveTransaction().delete(key);
     }
 
-    public boolean contains(String key) {
-        return store.containsKey(key);
+    public void commit() {
+        transactionManager.commit();
+        storage.saveToDisk(globalStore); // Persist changes
     }
 
-    private void loadFromDisk() {
-        try {
-            if (!Files.exists(Paths.get(dbFile))) {
-                return;
-            }
+    public void rollback() {
+        transactionManager.rollback();
+    }
 
-            try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split("=", 2);
-                    if (parts.length == 2) {
-                        store.put(parts[0], CacheValue.deserialize(parts[1]));
-                    }
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Error loading database: " + e.getMessage());
+    public void beginTransaction() {
+        transactionManager.beginTransaction();
+    }
+
+    public boolean isTransactionActive() {
+        return transactionManager.isTransactionActive();
+    }
+    /**
+     * Retrieves the current staged state of the active transaction.
+     * @return A map representing the current staged changes.
+     */
+    public Map<String, CacheValue> getStagedState() {
+        if (!isTransactionActive()) {
+            throw new IllegalStateException("No active transaction.");
         }
+        return transactionManager.getActiveTransaction().getStagedChanges();
+    }
+    /**
+     * Retrieves the current committed state of the database (global store).
+     * This excludes uncommitted changes from any active transaction.
+     */
+    public Map<String, CacheValue> getCommittedState() {
+        return new HashMap<>(globalStore); // Return a copy to prevent external modification
     }
 
-    private void saveToDisk() {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(dbFile))) {
-            for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
-                writer.write(entry.getKey() + "=" + entry.getValue().serialize());
-                writer.newLine();
-            }
-        } catch (IOException e) {
-            System.err.println("Error saving database: " + e.getMessage());
+    /**
+     * Search the committed state of the database using the provided query.
+     */
+    public Map<String, CacheValue> searchCommitted(CacheQuery query) {
+        return search(query, globalStore);
+    }
+
+    /**
+     * Search the staged changes in the current transaction.
+     */
+    public Map<String, CacheValue> searchStaged(CacheQuery query) {
+        if (!isTransactionActive()) {
+            throw new IllegalStateException("No active transaction.");
         }
-    }
-    public static void printHelp() {
-        System.out.println("\nAvailable commands:");
-        System.out.println("put <type> <key> <value> - Store a value of specified type");
-        System.out.println("  Types: string, int, bool, list");
-        System.out.println("  Example: put string name John");
-        System.out.println("  Example: put int age 25");
-        System.out.println("  Example: put bool active true");
-        System.out.println("  Example: put list colors red,blue,green");
-        System.out.println("get <key> - Retrieve a value by key");
-        System.out.println("delete <key> - Delete a key-value pair");
-        System.out.println("list - Show all stored key-value pairs");
-        System.out.println("type <key> - Show the type of a stored value");
-        System.out.println("search - Show search options");
-        System.out.println("help - Show this help message");
-        System.out.println("exit - Exit the program\n");
-    }
-    public Map<String, CacheValue> getStore() {
-        return store;
+        return search(query, transactionManager.getActiveTransaction().getStagedChanges());
     }
 
-    private void setupDefaultValidationRules() {
-        // Example validation rules
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("name", String.class)
-                        .required()
-                        .lengthBetween(2, 50)
-        );
-
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("age", Integer.class)
-                        .required()
-                        .validate(age -> age >= 0)
-                        .rangeBetween(0, 120)
-        );
-
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("email", String.class)
-                        .matchPattern("^[A-Za-z0-9+_.-]+@(.+)$")
-        );
-    }
+    /**
+     * Search both committed and staged states, combining results.
+     */
     public Map<String, CacheValue> search(CacheQuery query) {
         Map<String, CacheValue> results = new HashMap<>();
 
-        for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
+        // Search committed state
+        results.putAll(searchCommitted(query));
+
+        // If a transaction is active, overlay results with staged changes
+        if (isTransactionActive()) {
+            Map<String, CacheValue> stagedResults = searchStaged(query);
+            results.putAll(stagedResults); // Staged changes take precedence
+        }
+
+        return results;
+    }
+
+    /**
+     * Perform a search on the given data map using the provided query.
+     */
+    private Map<String, CacheValue> search(CacheQuery query, Map<String, CacheValue> data) {
+        Map<String, CacheValue> results = new HashMap<>();
+
+        for (Map.Entry<String, CacheValue> entry : data.entrySet()) {
             if (matchesQuery(entry.getKey(), entry.getValue(), query)) {
                 results.put(entry.getKey(), entry.getValue());
             }
