@@ -1,7 +1,3 @@
-Here's the updated README file with the added **Data Validation & Constraints** section:
-
----
-
 # CacheBox
 
 A lightweight, multi-type key-value database implemented in Java with file-based persistence and an interactive CLI.
@@ -98,11 +94,11 @@ Currently supported types:
 // Create the validation rules
 ValidationRule<Integer> ageRule = ValidationRule.forKey("age", Integer.class)
     .required()
-    .addValidator(value -> value >= 0 && value <= 120);
+    .validate(value -> value >= 0 && value <= 120);
 
 ValidationRule<String> nameRule = ValidationRule.forKey("name", String.class)
     .required()
-    .addValidator(value -> value.length() > 1);
+    .validate(value -> value.length() > 1);
 
 // Add rules to the manager
 ValidationManager validationManager = new ValidationManager();
@@ -232,5 +228,3 @@ For issues, questions, or contributions, please open an issue in the repository.
 
 ---
 Made with ☕ by developers, for developers!
-
----
