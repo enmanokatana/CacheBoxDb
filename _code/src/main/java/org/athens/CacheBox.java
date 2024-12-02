@@ -12,6 +12,8 @@ public class CacheBox {
         this.storage = new Storage(dbFile);
         this.globalStore = storage.loadFromDisk();
         this.transactionManager = new TransactionManager(globalStore);
+        storage.loadWithRecovery(globalStore);
+
     }
 
     public void put(String key, CacheValue value) {

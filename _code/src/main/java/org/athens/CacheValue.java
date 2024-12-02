@@ -75,16 +75,20 @@ public class CacheValue implements Serializable {
     public String serialize() {
         if (isNull()) return "NULL:" + version + ":null";
         switch (type) {
-            case STRING: return "STRING:" + version + ":" + value;
-            case INTEGER: return "INTEGER:" + version + ":" + value;
-            case BOOLEAN: return "BOOLEAN:" + version + ":" + value;
-            case LIST: return "LIST:" + version + ":" + String.join(",", ((List<?>) value).stream()
-                    .map(Object::toString)
-                    .toArray(String[]::new));
-            default: throw new IllegalStateException("Unknown type: " + type);
+            case STRING:
+                return "STRING:" + version + ":" + value;
+            case INTEGER:
+                return "INTEGER:" + version + ":" + value;
+            case BOOLEAN:
+                return "BOOLEAN:" + version + ":" + value;
+            case LIST:
+                return "LIST:" + version + ":" + String.join(",", ((List<?>) value).stream()
+                        .map(Object::toString)
+                        .toArray(String[]::new));
+            default:
+                throw new IllegalStateException("Unknown type: " + type);
         }
-    }
-    public static CacheValue deserialize(String data) {
+    }    public static CacheValue deserialize(String data) {
         String[] parts = data.split(":", 3);
         if (parts.length != 3) throw new IllegalArgumentException("Invalid format");
 
