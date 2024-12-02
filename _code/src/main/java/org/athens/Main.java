@@ -3,6 +3,7 @@ package org.athens;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.regex.PatternSyntaxException;
 
 public class Main {
     private static void processSearchCommand(String[] args, CacheBox db) {
@@ -20,10 +21,14 @@ public class Main {
         for (int i = 1; i < args.length; i++) {
             switch (args[i]) {
                 case "-pattern":
-                    if (i + 1 < args.length) {
+                    try {
                         queryBuilder.withPattern(args[++i]);
+                    } catch (PatternSyntaxException e) {
+                        System.out.println("Error: Invalid regex pattern.");
+                        return;
                     }
                     break;
+
                 case "-range":
                     if (i + 2 < args.length) {
                         queryBuilder.withRange(
@@ -54,7 +59,7 @@ public class Main {
         }
     }
     public static void main(String[] args) {
-        CacheBox db = new CacheBox("cachebox.cbx");
+        CacheBox db = new CacheBox("cachebox");
         Scanner scanner = new Scanner(System.in);
 
         System.out.println("CacheBox v1.0 - Multi-type Key-Value Store");
@@ -74,8 +79,26 @@ public class Main {
             try {
                 switch (command) {
                     case "exit":
+                        System.out.println("Saving data and exiting...");
+                        db.saveToDisk();
                         System.out.println("Goodbye!");
                         return;
+                    case "log":
+                        if (parts.length < 2) {
+                            System.out.println("Usage: log <enable|disable>");
+                        } else {
+                            String logOption = parts[1].toLowerCase();
+                            if (logOption.equals("enable")) {
+                                db.enableLogging(true);
+                                System.out.println("Write-Ahead Logging has been enabled.");
+                            } else if (logOption.equals("disable")) {
+                                db.enableLogging(false);
+                                System.out.println("Write-Ahead Logging has been disabled.");
+                            } else {
+                                System.out.println("Invalid option. Use 'enable' or 'disable'.");
+                            }
+                        }
+                        break;
 
                     case "help":
                         CacheBox.printHelp();

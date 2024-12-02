@@ -6,13 +6,17 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class CacheBox {
 
-    private Map<String, CacheValue> store;
+    private final Map<String, CacheValue> store;
     private final String dbFile;
 
+    private final String walFile;
+    private final ReentrantLock lock = new ReentrantLock();
     private final CacheValidation.ValidationManager validationManager;
+    private boolean loggingEnabled; // Flag to control logging
 
 
 
@@ -21,42 +25,96 @@ public class CacheBox {
         setupDefaultValidationRules();
 
         this.dbFile = filename;
+        this.walFile = filename + ".log";
+
         this.store = new HashMap<>();
         loadFromDisk();
+        this.loggingEnabled = false; // Default logging state
+
 
     }
 
     public void put(String key, CacheValue value) {
+        lock.lock();
+        try{
+            logOperation("PUT",key,value.serialize());
+            validateAndPut(key,value);
+            saveToDisk();
+
+        }finally {
+            lock.unlock();
+        }
+    }
+    private void validateAndPut(String key, CacheValue value) {
         CacheValidation.ValidationResult result = validationManager.validate(key, value);
         if (!result.isValid()) {
-            throw new ValidationException(
-                    "Validation failed for key '" + key + "': " +
-                            result.getErrorMessage()
-            );
+            throw new ValidationException("Validation failed for key '" + key + "': " + result.getErrorMessage());
         }
         store.put(key, value);
-        saveToDisk();
     }
-
     public CacheValue get(String key) {
-        return store.get(key);
+        lock.lock();
+        try{
+            return store.get(key);
+        }finally {
+            lock.unlock();
+        }
     }
 
     public void delete(String key) {
-        store.remove(key);
-        saveToDisk();
+       lock.lock();
+       try{
+           logOperation("DELETE",key,null);
+           store.remove(key);
+           saveToDisk();
+       }finally {
+           lock.unlock();
+       }
     }
 
     public boolean contains(String key) {
-        return store.containsKey(key);
+        lock.lock();
+        try{
+            return store.containsKey(key);
+        }finally {
+            lock.unlock();
+        }
+    }
+    public Transaction beginTransaction(){
+        return new Transaction(this);
     }
 
+    private void recoverFromWAL() {
+        if (!Files.exists(Paths.get(walFile))) {
+            return;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(walFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(":", 3);
+                if (parts.length >= 2) {
+                    String operation = parts[0];
+                    String key = parts[1];
+                    String value = parts.length == 3 ? parts[2] : null;
+
+                    if ("PUT".equals(operation) && value != null) {
+                        store.put(key, CacheValue.deserialize(value));
+                    } else if ("DELETE".equals(operation)) {
+                        store.remove(key);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to recover from WAL: " + e.getMessage());
+        }
+    }
     private void loadFromDisk() {
+        lock.lock();
         try {
+            recoverFromWAL();
             if (!Files.exists(Paths.get(dbFile))) {
                 return;
             }
-
             try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -65,13 +123,15 @@ public class CacheBox {
                         store.put(parts[0], CacheValue.deserialize(parts[1]));
                     }
                 }
+            } catch (IOException e) {
+                System.err.println("Error loading database: " + e.getMessage());
             }
-        } catch (IOException e) {
-            System.err.println("Error loading database: " + e.getMessage());
+        } finally {
+            lock.unlock();
         }
     }
 
-    private void saveToDisk() {
+    public void saveToDisk() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(dbFile))) {
             for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
                 writer.write(entry.getKey() + "=" + entry.getValue().serialize());
@@ -80,7 +140,21 @@ public class CacheBox {
         } catch (IOException e) {
             System.err.println("Error saving database: " + e.getMessage());
         }
+        clearWAL();
     }
+    private void clearWAL() {
+        lock.lock();
+        try {
+            try {
+                Files.deleteIfExists(Paths.get(walFile));
+            } catch (IOException e) {
+                System.err.println("Failed to clear WAL: " + e.getMessage());
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public static void printHelp() {
         System.out.println("\nAvailable commands:");
         System.out.println("put <type> <key> <value> - Store a value of specified type");
@@ -94,6 +168,7 @@ public class CacheBox {
         System.out.println("list - Show all stored key-value pairs");
         System.out.println("type <key> - Show the type of a stored value");
         System.out.println("search - Show search options");
+        System.out.println("log <enable|disable> - Enable or disable Write-Ahead Logging");
         System.out.println("help - Show this help message");
         System.out.println("exit - Exit the program\n");
     }
@@ -122,15 +197,18 @@ public class CacheBox {
         );
     }
     public Map<String, CacheValue> search(CacheQuery query) {
-        Map<String, CacheValue> results = new HashMap<>();
-
-        for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
-            if (matchesQuery(entry.getKey(), entry.getValue(), query)) {
-                results.put(entry.getKey(), entry.getValue());
+        lock.lock();
+        try {
+            Map<String, CacheValue> results = new HashMap<>();
+            for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
+                if (matchesQuery(entry.getKey(), entry.getValue(), query)) {
+                    results.put(entry.getKey(), entry.getValue());
+                }
             }
+            return results;
+        } finally {
+            lock.unlock();
         }
-
-        return results;
     }
 
     private boolean matchesQuery(String key, CacheValue value, CacheQuery query) {
@@ -164,4 +242,38 @@ public class CacheBox {
         return query.getPattern() == null && query.getMinValue() == null &&
                 query.getMaxValue() == null && query.getTypeFilter() == null;
     }
+    private void logOperation(String operation, String key, String value) {
+        if (!loggingEnabled) {
+            return; // Skip logging if disabled
+        }
+        try{
+
+            createLogFileIfNotExists(); // Ensure the log file exists
+
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(walFile, true))) {
+                writer.write(operation + ":" + key + ":" + (value == null ? "null" : value));
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write to WAL: " + e.getMessage());
+        }
+    }
+    private void createLogFileIfNotExists() {
+        try {
+            if (!Files.exists(Paths.get(walFile))) {
+                Files.createFile(Paths.get(walFile)); // Create the log file if it doesn't exist
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to create WAL file: " + e.getMessage());
+        }
+    }
+    public void enableLogging(boolean enable) {
+        this.loggingEnabled = enable; // `loggingEnabled` is a boolean field in CacheBox
+        if (enable) {
+            System.out.println("Logging is now enabled.");
+        } else {
+            System.out.println("Logging is now disabled.");
+        }
+    }
+
 }
