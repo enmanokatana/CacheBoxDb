@@ -78,16 +78,16 @@ public class Main {
 
                         switch (inputType) {
                             case "string":
-                                db.put(inputKey, CacheValue.of(inputValue));
+                                db.put(inputKey, CacheValue.of(0, inputValue)); // Use version 0
                                 break;
                             case "int":
-                                db.put(inputKey, CacheValue.of(Integer.parseInt(inputValue)));
+                                db.put(inputKey, CacheValue.of(0, Integer.parseInt(inputValue)));
                                 break;
                             case "bool":
-                                db.put(inputKey, CacheValue.of(Boolean.parseBoolean(inputValue)));
+                                db.put(inputKey, CacheValue.of(0, Boolean.parseBoolean(inputValue)));
                                 break;
                             case "list":
-                                db.put(inputKey, CacheValue.of(java.util.Arrays.asList(inputValue.split(","))));
+                                db.put(inputKey, CacheValue.of(0, java.util.Arrays.asList(inputValue.split(","))));
                                 break;
                             default:
                                 System.out.println("Unknown type. Use: string, int, bool, or list");
