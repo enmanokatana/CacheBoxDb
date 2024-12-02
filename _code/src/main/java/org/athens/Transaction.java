@@ -7,6 +7,7 @@ public class Transaction {
     private final Map<String, CacheValue> globalStore;
     private final Map<String, CacheValue> stagedChanges = new HashMap<>();
     private final Map<String, CacheValue> stagedDeletions = new HashMap<>();
+    private final Map<String, Integer> readVersions = new HashMap<>();
 
     public Transaction(Map<String, CacheValue> globalStore) {
         this.globalStore = globalStore;
@@ -14,7 +15,7 @@ public class Transaction {
 
     public void put(String key, CacheValue value) {
         stagedChanges.put(key, value);
-        stagedDeletions.remove(key); // Undo staged deletions if any
+        stagedDeletions.remove(key);
     }
 
     public CacheValue get(String key) {
@@ -22,38 +23,45 @@ public class Transaction {
             return stagedChanges.get(key);
         }
         if (stagedDeletions.containsKey(key)) {
-            return null; // Deleted in this transaction
+            return null;
         }
-        return globalStore.get(key);
+        CacheValue value = globalStore.get(key);
+        if (value != null) {
+            readVersions.put(key, value.getVersion());
+        }
+        return value;
     }
 
     public void delete(String key) {
         if (globalStore.containsKey(key) || stagedChanges.containsKey(key)) {
             stagedDeletions.put(key, stagedChanges.getOrDefault(key, globalStore.get(key)));
-            stagedChanges.remove(key); // Undo staged changes if any
+            stagedChanges.remove(key);
         }
     }
 
     public void commit() {
         for (Map.Entry<String, CacheValue> entry : stagedChanges.entrySet()) {
-            globalStore.put(entry.getKey(), entry.getValue());
-        }
-        for (String key : stagedDeletions.keySet()) {
-            globalStore.remove(key);
+            String key = entry.getKey();
+            CacheValue newValue = entry.getValue();
+            CacheValue current = globalStore.get(key);
+            int expectedVersion = readVersions.getOrDefault(key, current != null ? current.getVersion() : 0);
+            if (current != null && current.getVersion() != expectedVersion) {
+                throw new ConcurrencyException("Conflict on key " + key);
+            }
+            int newVersion = current != null ? current.getVersion() + 1 : 1;
+            int finalVersion = newValue.getVersion() == 0 ? newVersion : newValue.getVersion();
+            CacheValue updatedValue = new CacheValue(finalVersion, newValue.getType(), newValue.getValue());
+            globalStore.put(key, updatedValue);
         }
         stagedChanges.clear();
-        stagedDeletions.clear();
+        readVersions.clear();
     }
-
     public void rollback() {
         stagedChanges.clear();
         stagedDeletions.clear();
+        readVersions.clear();
     }
 
-    /**
-     * Expose the current staged changes.
-     * @return A map of key-value pairs staged for the current transaction.
-     */
     public Map<String, CacheValue> getStagedChanges() {
         return stagedChanges;
     }

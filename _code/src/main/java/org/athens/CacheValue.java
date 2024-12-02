@@ -15,29 +15,38 @@ public class CacheValue implements Serializable {
     }
     private final Type type;
     private final Object value;
+    private final int version;
 
-    private CacheValue(Type type,Object value){
+
+    public CacheValue(int version, Type type, Object value) {
+        this.version = version;
         this.type = type;
         this.value = value;
     }
-    public static CacheValue of(String value) {
-        return new CacheValue(Type.STRING, value);
+    public int getVersion() {
+        return version;
+    }
+    public static CacheValue of(int version, String value) {
+        if (version < 0) {
+            throw new IllegalArgumentException("Version cannot be negative.");
+        }
+        return new CacheValue(version, Type.STRING, value);
     }
 
-    public static CacheValue of(Integer value) {
-        return new CacheValue(Type.INTEGER, value);
+    public static CacheValue of(int version, Integer value) {
+        return new CacheValue(version, Type.INTEGER, value);
     }
 
-    public static CacheValue of(Boolean value) {
-        return new CacheValue(Type.BOOLEAN, value);
+    public static CacheValue of(int version, Boolean value) {
+        return new CacheValue(version, Type.BOOLEAN, value);
     }
 
-    public static CacheValue of(List<?> value) {
-        return new CacheValue(Type.LIST, new ArrayList<>(value));
+    public static CacheValue of(int version, List<?> value) {
+        return new CacheValue(version, Type.LIST, new ArrayList<>(value));
     }
 
-    public static CacheValue ofNull() {
-        return new CacheValue(Type.NULL, null);
+    public static CacheValue ofNull(int version) {
+        return new CacheValue(version, Type.NULL, null);
     }
 
     public String asString() {
@@ -64,34 +73,34 @@ public class CacheValue implements Serializable {
     }
 
     public String serialize() {
-        if (isNull()) return "NULL:null";
+        if (isNull()) return "NULL:" + version + ":null";
         switch (type) {
-            case STRING: return "STRING:" + value;
-            case INTEGER: return "INTEGER:" + value;
-            case BOOLEAN: return "BOOLEAN:" + value;
-            case LIST: return "LIST:" + String.join(",", ((List<?>) value).stream()
+            case STRING: return "STRING:" + version + ":" + value;
+            case INTEGER: return "INTEGER:" + version + ":" + value;
+            case BOOLEAN: return "BOOLEAN:" + version + ":" + value;
+            case LIST: return "LIST:" + version + ":" + String.join(",", ((List<?>) value).stream()
                     .map(Object::toString)
                     .toArray(String[]::new));
             default: throw new IllegalStateException("Unknown type: " + type);
         }
     }
     public static CacheValue deserialize(String data) {
-        String[] parts = data.split(":", 2);
-        if (parts.length != 2) throw new IllegalArgumentException("Invalid format");
+        String[] parts = data.split(":", 3);
+        if (parts.length != 3) throw new IllegalArgumentException("Invalid format");
 
         Type type = Type.valueOf(parts[0]);
-        String value = parts[1];
+        int version = Integer.parseInt(parts[1]);
+        String value = parts[2];
 
         switch (type) {
-            case NULL: return ofNull();
-            case STRING: return of(value);
-            case INTEGER: return of(Integer.parseInt(value));
-            case BOOLEAN: return of(Boolean.parseBoolean(value));
-            case LIST: return of(Arrays.asList(value.split(",")));
+            case NULL: return ofNull(version);
+            case STRING: return of(version, value);
+            case INTEGER: return of(version, Integer.parseInt(value));
+            case BOOLEAN: return of(version, Boolean.parseBoolean(value));
+            case LIST: return of(version, Arrays.asList(value.split(",")));
             default: throw new IllegalStateException("Unknown type: " + type);
         }
     }
-
     public Object getValue() {
         return value;
     }

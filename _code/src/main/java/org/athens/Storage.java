@@ -1,4 +1,5 @@
 package org.athens;
+
 import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,9 +20,9 @@ public class Storage {
             try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split("=", 2);
-                    if (parts.length == 2) {
-                        store.put(parts[0], CacheValue.deserialize(parts[1]));
+                    String[] parts = line.split(":", 3);
+                    if (parts.length == 3) {
+                        store.put(parts[0], CacheValue.deserialize(parts[1] + ":" + parts[2]));
                     }
                 }
             }
