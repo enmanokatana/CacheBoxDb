@@ -1,167 +1,173 @@
 package org.athens;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class CacheBox {
-
-    private Map<String, CacheValue> store;
+    private static final Logger logger = LoggerFactory.getLogger(CacheBox.class);
+    private final Map<String, CacheValue> store;
     private final String dbFile;
-
+    private final String walFile;
+    private final ReentrantLock lock = new ReentrantLock();
     private final CacheValidation.ValidationManager validationManager;
+    private boolean loggingEnabled;
 
-
-
-    public CacheBox(String filename) {
+    public CacheBox(String dbFile, String walFile) {
+        this.store = new HashMap<>();
+        this.dbFile = dbFile;
+        this.walFile = walFile;
         this.validationManager = new CacheValidation.ValidationManager();
         setupDefaultValidationRules();
-
-        this.dbFile = filename;
-        this.store = new HashMap<>();
         loadFromDisk();
-
+        this.loggingEnabled = false;
     }
 
     public void put(String key, CacheValue value) {
-        CacheValidation.ValidationResult result = validationManager.validate(key, value);
-        if (!result.isValid()) {
-            throw new ValidationException(
-                    "Validation failed for key '" + key + "': " +
-                            result.getErrorMessage()
-            );
+        lock.lock();
+        try {
+            validateAndPut(key, value);
+            if (loggingEnabled) {
+                logOperation("PUT", key, value.serialize());
+            }
+            saveToDisk();
+        } finally {
+            lock.unlock();
         }
-        store.put(key, value);
-        saveToDisk();
     }
 
     public CacheValue get(String key) {
-        return store.get(key);
-    }
-
-    public void delete(String key) {
-        store.remove(key);
-        saveToDisk();
-    }
-
-    public boolean contains(String key) {
-        return store.containsKey(key);
-    }
-
-    private void loadFromDisk() {
+        lock.lock();
         try {
-            if (!Files.exists(Paths.get(dbFile))) {
-                return;
-            }
-
-            try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split("=", 2);
-                    if (parts.length == 2) {
-                        store.put(parts[0], CacheValue.deserialize(parts[1]));
-                    }
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Error loading database: " + e.getMessage());
+            return store.get(key);
+        } finally {
+            lock.unlock();
         }
     }
 
-    private void saveToDisk() {
+    public void delete(String key) {
+        lock.lock();
+        try {
+            CacheValue value = store.remove(key);
+            if (loggingEnabled) {
+                logOperation("DELETE", key, value != null ? value.serialize() : "NULL:null");
+            }
+            saveToDisk();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void loadFromDisk() {
+        lock.lock();
+        try {
+            recoverFromWAL();
+            readDataFromDbFile();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void saveToDisk() {
+        lock.lock();
+        try {
+            writeDataToDbFile();
+            clearWAL();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void recoverFromWAL() {
+        List<String> operations = readOperationsFromWAL();
+        for (String operation : operations) {
+            String[] parts = operation.split(":", 3);
+            if (parts.length < 3) {
+                continue;
+            }
+            String opType = parts[0];
+            String key = parts[1];
+            String data = parts[2];
+            switch (opType) {
+                case "PUT":
+                    CacheValue value = CacheValue.deserialize(data);
+                    store.put(key, value);
+                    break;
+                case "DELETE":
+                    store.remove(key);
+                    break;
+            }
+        }
+    }
+
+    private List<String> readOperationsFromWAL() {
+        List<String> operations = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(walFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                operations.add(line);
+            }
+        } catch (IOException e) {
+            logger.error("Failed to read from WAL: " + e.getMessage());
+        }
+        return operations;
+    }
+
+    private void readDataFromDbFile() {
+        try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split("=", 2);
+                if (parts.length == 2) {
+                    store.put(parts[0], CacheValue.deserialize(parts[1]));
+                }
+            }
+        } catch (IOException e) {
+            logger.error("Error loading database: " + e.getMessage());
+        }
+    }
+
+    private void writeDataToDbFile() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(dbFile))) {
             for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
                 writer.write(entry.getKey() + "=" + entry.getValue().serialize());
                 writer.newLine();
             }
         } catch (IOException e) {
-            System.err.println("Error saving database: " + e.getMessage());
+            logger.error("Error saving database: " + e.getMessage());
         }
     }
-    public static void printHelp() {
-        System.out.println("\nAvailable commands:");
-        System.out.println("put <type> <key> <value> - Store a value of specified type");
-        System.out.println("  Types: string, int, bool, list");
-        System.out.println("  Example: put string name John");
-        System.out.println("  Example: put int age 25");
-        System.out.println("  Example: put bool active true");
-        System.out.println("  Example: put list colors red,blue,green");
-        System.out.println("get <key> - Retrieve a value by key");
-        System.out.println("delete <key> - Delete a key-value pair");
-        System.out.println("list - Show all stored key-value pairs");
-        System.out.println("type <key> - Show the type of a stored value");
-        System.out.println("search - Show search options");
-        System.out.println("help - Show this help message");
-        System.out.println("exit - Exit the program\n");
+
+    private void clearWAL() {
+        try {
+            Files.deleteIfExists(Paths.get(walFile));
+        } catch (IOException e) {
+            logger.error("Failed to clear WAL: " + e.getMessage());
+        }
     }
-    public Map<String, CacheValue> getStore() {
-        return store;
+
+    private void logOperation(String operation, String key, String value) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(walFile, true))) {
+            writer.write(operation + ":" + key + ":" + value);
+            writer.newLine();
+        } catch (IOException e) {
+            logger.error("Failed to write to WAL: " + e.getMessage());
+        }
     }
 
     private void setupDefaultValidationRules() {
-        // Example validation rules
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("name", String.class)
-                        .required()
-                        .lengthBetween(2, 50)
-        );
-
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("age", Integer.class)
-                        .required()
-                        .validate(age -> age >= 0)
-                        .rangeBetween(0, 120)
-        );
-
-        validationManager.addRule(
-                CacheValidation.ValidationRule.forKey("email", String.class)
-                        .matchPattern("^[A-Za-z0-9+_.-]+@(.+)$")
-        );
-    }
-    public Map<String, CacheValue> search(CacheQuery query) {
-        Map<String, CacheValue> results = new HashMap<>();
-
-        for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
-            if (matchesQuery(entry.getKey(), entry.getValue(), query)) {
-                results.put(entry.getKey(), entry.getValue());
-            }
-        }
-
-        return results;
+        // Define default validation rules
     }
 
-    private boolean matchesQuery(String key, CacheValue value, CacheQuery query) {
-        // Type filter
-        if (query.getTypeFilter() != null && value.getType() != query.getTypeFilter()) {
-            return false;
-        }
-
-        // Pattern matching for key or string value
-        if (query.getPattern() != null) {
-            if (key.matches(query.getPattern())) {
-                return true;
-            }
-            if (value.getType() == CacheValue.Type.STRING &&
-                    value.getValue().toString().matches(query.getPattern())) {
-                return true;
-            }
-        }
-
-        // Range queries for integer values
-        if (value.getType() == CacheValue.Type.INTEGER) {
-            Integer intValue = (Integer) value.getValue();
-            if (query.getMinValue() != null && intValue < query.getMinValue()) {
-                return false;
-            }
-            if (query.getMaxValue() != null && intValue > query.getMaxValue()) {
-                return false;
-            }
-        }
-
-        return query.getPattern() == null && query.getMinValue() == null &&
-                query.getMaxValue() == null && query.getTypeFilter() == null;
+    private void validateAndPut(String key, CacheValue value) {
+        // Apply validation rules
     }
 }
