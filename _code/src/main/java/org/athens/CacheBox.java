@@ -1,5 +1,10 @@
 package org.athens;
 
+import org.athens.utils.AESEncryptionStrategy;
+import org.athens.utils.EncryptionStrategy;
+import org.athens.utils.XOREncryptionStrategy;
+
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -7,15 +12,33 @@ public class CacheBox {
     private final Map<String, CacheValue> globalStore;
     private final Storage storage;
     private final TransactionManager transactionManager;
+    private  EncryptionStrategy encryptionStrategy;
 
-    public CacheBox(String dbFile) {
-        this.storage = new Storage(dbFile);
+    private  boolean encryptionEnabled;
+    private  byte[]  encryptionKey;
+
+    public CacheBox(String dbFile,boolean encryptionEnabled , byte[]  encryptionKey, EncryptionStrategy encryptionStrategy) {
+        this.storage = new Storage(dbFile, encryptionEnabled, encryptionKey, encryptionStrategy);
         this.globalStore = storage.loadFromDisk();
         this.transactionManager = new TransactionManager(globalStore);
+        this.encryptionEnabled = encryptionEnabled;
+        this.encryptionKey = encryptionKey;
+        this.encryptionStrategy = encryptionStrategy;
+
         storage.loadWithRecovery(globalStore);
 
     }
-
+    public CacheBox(String dbFile) {
+        byte[] key = new SecureRandom().generateSeed(16);
+        EncryptionStrategy strategy = new AESEncryptionStrategy();
+        this.storage = new Storage(dbFile, true, key, strategy);
+        this.globalStore = storage.loadFromDisk();
+        this.transactionManager = new TransactionManager(globalStore);
+        this.encryptionEnabled = true;
+        this.encryptionKey = key;
+        this.encryptionStrategy = strategy;
+        storage.loadWithRecovery(globalStore);
+    }
     public void put(String key, CacheValue value) {
         transactionManager.getActiveTransaction().put(key, value);
     }
@@ -142,5 +165,46 @@ public class CacheBox {
 
         return query.getPattern() == null && query.getMinValue() == null &&
                 query.getMaxValue() == null && query.getTypeFilter() == null;
+    }
+
+    public void setEncryptionStrategy(EncryptionStrategy encryptionStrategy) {
+        this.encryptionStrategy = encryptionStrategy;
+        storage.setEncryptionStrategy(
+                encryptionStrategy
+        );
+    }
+
+    public void setEncryptionEnabled(boolean encryptionEnabled) {
+        this.encryptionEnabled = encryptionEnabled;
+        storage.setEncryptionEnabled(encryptionEnabled);
+    }
+
+    public void setEncryptionKey(byte[] encryptionKey) {
+        this.encryptionKey = encryptionKey;
+        storage.setEncryptionKey(encryptionKey);
+    }
+
+    public Map<String, CacheValue> getGlobalStore() {
+        return globalStore;
+    }
+
+    public Storage getStorage() {
+        return storage;
+    }
+
+    public TransactionManager getTransactionManager() {
+        return transactionManager;
+    }
+
+    public EncryptionStrategy getEncryptionStrategy() {
+        return encryptionStrategy;
+    }
+
+    public boolean isEncryptionEnabled() {
+        return encryptionEnabled;
+    }
+
+    public byte[] getEncryptionKey() {
+        return encryptionKey;
     }
 }

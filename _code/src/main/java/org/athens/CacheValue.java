@@ -1,6 +1,9 @@
 package org.athens;
 
 import java.io.Serializable;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -74,36 +77,44 @@ public class CacheValue implements Serializable {
 
     public String serialize() {
         if (isNull()) return "NULL:" + version + ":null";
+        String encodedValue = URLEncoder.encode(value.toString(), StandardCharsets.UTF_8);
         switch (type) {
             case STRING:
-                return "STRING:" + version + ":" + value;
+                return "STRING:" + version + ":" + encodedValue;
             case INTEGER:
-                return "INTEGER:" + version + ":" + value;
+                return "INTEGER:" + version + ":" + encodedValue;
             case BOOLEAN:
-                return "BOOLEAN:" + version + ":" + value;
+                return "BOOLEAN:" + version + ":" + encodedValue;
             case LIST:
-                return "LIST:" + version + ":" + String.join(",", ((List<?>) value).stream()
-                        .map(Object::toString)
-                        .toArray(String[]::new));
+                return "LIST:" + version + ":" + encodedValue;
             default:
                 throw new IllegalStateException("Unknown type: " + type);
         }
-    }    public static CacheValue deserialize(String data) {
+    }
+    public static CacheValue deserialize(String data) {
+
+//        String[] parts = data.split(":", 3);
+//        if (parts.length != 3) throw new IllegalArgumentException("Invalid format");
+//
+//        Type type = Type.valueOf(parts[0]);
+//        int version = Integer.parseInt(parts[1]);
+//        String value = parts[2];
+
+
         String[] parts = data.split(":", 3);
         if (parts.length != 3) throw new IllegalArgumentException("Invalid format");
-
         Type type = Type.valueOf(parts[0]);
         int version = Integer.parseInt(parts[1]);
-        String value = parts[2];
-
-        switch (type) {
-            case NULL: return ofNull(version);
-            case STRING: return of(version, value);
-            case INTEGER: return of(version, Integer.parseInt(value));
-            case BOOLEAN: return of(version, Boolean.parseBoolean(value));
-            case LIST: return of(version, Arrays.asList(value.split(",")));
-            default: throw new IllegalStateException("Unknown type: " + type);
-        }
+        String encodedValue = parts[2];
+        String value = URLDecoder.decode(encodedValue, StandardCharsets.UTF_8);
+        return switch (type) {
+            case NULL -> ofNull(version);
+            case STRING -> of(version, value);
+            case INTEGER -> of(version, Integer.parseInt(value));
+            case BOOLEAN -> of(version, Boolean.parseBoolean(value));
+            case LIST -> of(version, Arrays.asList(value.split(",")));
+            default -> throw new IllegalStateException("Unknown type: " + type);
+        };
     }
     public Object getValue() {
         return value;
