@@ -1,6 +1,14 @@
 package org.athens;
 
+import org.athens.utils.AESEncryptionStrategy;
+import org.athens.utils.EncryptionStrategy;
+import org.athens.utils.NoEncryptionStrategy;
+import org.athens.utils.XOREncryptionStrategy;
+
+import java.security.SecureRandom;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.Scanner;
 
 public class Main {
@@ -125,7 +133,131 @@ public class Main {
                         db.delete(parts[1]);
                         System.out.println("Key staged for deletion (uncommitted).");
                         break;
-
+                    case "encrypt":
+                        if (parts.length < 2) {
+                            printHelp();
+                            break;
+                        }
+                        String subCommand = parts[1];
+                        switch (subCommand.toLowerCase()) {
+                            case "enable":
+                                db.setEncryptionEnabled(true);
+                                System.out.println("Encryption enabled.");
+                                break;
+                            case "disable":
+                                db.setEncryptionEnabled(false);
+                                System.out.println("Encryption disabled.");
+                                break;
+                            case "set_algorithm":
+                                if (parts.length < 3) {
+                                    System.out.println("Usage: encrypt set_algorithm <algorithm_keyword>");
+                                    break;
+                                }
+                                String algorithmKeyword = parts[2].toUpperCase();
+                                if (ENCRYPTION_ALGORITHMS.containsKey(algorithmKeyword)) {
+                                    if (algorithmKeyword.equals("AES")) {
+                                        if (db.getEncryptionKey() == null || db.getEncryptionKey().length != 16) {
+                                            System.out.println("AES requires a 16-byte key.");
+                                            System.out.println("Do you want to set a key now? (yes/no)");
+                                            String choice = scanner.nextLine().trim().toLowerCase();
+                                            if (choice.equals("yes")) {
+                                                while (true) {
+                                                    System.out.println("Do you want to generate a random key or enter your own? (generate/enter)");
+                                                    String keyOption = scanner.nextLine().trim().toLowerCase();
+                                                    if (keyOption.equals("generate")) {
+                                                        byte[] key = new byte[16];
+                                                        new SecureRandom().nextBytes(key);
+                                                        db.setEncryptionKey(key);
+                                                        System.out.println("Generated AES key: " + new String(key));
+                                                        break;
+                                                    } else if (keyOption.equals("enter")) {
+                                                        while (true) {
+                                                            System.out.println("Enter a 16-byte key (or 'cancel' to exit):");
+                                                            String keyInput = scanner.nextLine().trim();
+                                                            if (keyInput.equals("cancel")) {
+                                                                System.out.println("AES setup aborted.");
+                                                                break;
+                                                            }
+                                                            byte[] keyBytes = keyInput.getBytes();
+                                                            if (keyBytes.length == 16) {
+                                                                db.setEncryptionKey(keyBytes);
+                                                                break;
+                                                            } else {
+                                                                System.out.println("Invalid key length. Please enter a 16-byte key.");
+                                                            }
+                                                        }
+                                                        if (db.getEncryptionKey() != null && db.getEncryptionKey().length == 16) {
+                                                            break;
+                                                        } else {
+                                                            System.out.println("AES setup aborted.");
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        System.out.println("Invalid choice. Please enter 'generate' or 'enter'.");
+                                                    }
+                                                }
+                                            } else if (choice.equals("no")) {
+                                                System.out.println("AES setup aborted due to missing key.");
+                                                break;
+                                            } else {
+                                                System.out.println("Invalid input. Please enter 'yes' or 'no'.");
+                                                break;
+                                            }
+                                        }
+                                        if (db.getEncryptionKey() != null && db.getEncryptionKey().length == 16) {
+                                            try {
+                                                EncryptionStrategy strategy = new AESEncryptionStrategy();
+                                                db.setEncryptionStrategy(strategy);
+                                                db.setEncryptionEnabled(true);
+                                                System.out.println("Encryption algorithm set to AES.");
+                                            } catch (Exception e) {
+                                                System.out.println("Error setting AES encryption strategy: " + e.getMessage());
+                                            }
+                                        } else {
+                                            System.out.println("AES setup aborted due to invalid key.");
+                                        }
+                                    } else {
+                                        try {
+                                            Class<? extends EncryptionStrategy> strategyClass = ENCRYPTION_ALGORITHMS.get(algorithmKeyword);
+                                            EncryptionStrategy strategy = strategyClass.getDeclaredConstructor().newInstance();
+                                            db.setEncryptionStrategy(strategy);
+                                            db.setEncryptionEnabled(true);
+                                            System.out.println("Encryption algorithm set to " + algorithmKeyword);
+                                        } catch (Exception e) {
+                                            System.out.println("Error setting encryption strategy: " + e.getMessage());
+                                        }
+                                    }
+                                } else {
+                                    System.out.println("Unknown algorithm: " + algorithmKeyword);
+                                    System.out.println("Available algorithms: NO, XOR, AES");
+                                }
+                                break;
+                            case "set_key":
+                                if (parts.length < 3) {
+                                    System.out.println("Usage: encrypt set_key <key>");
+                                    break;
+                                }
+                                String keyInput = parts[2];
+                                byte[] keyBytes = keyInput.getBytes();
+                                if (db.getEncryptionStrategy() instanceof AESEncryptionStrategy && keyBytes.length != 16) {
+                                    System.out.println("Invalid key length for AES. Please provide a 16-byte key.");
+                                } else {
+                                    db.setEncryptionKey(keyBytes);
+                                    System.out.println("Encryption key set.");
+                                }
+                                break;
+                            case "generate_key":
+                                if (db.getEncryptionStrategy() instanceof AESEncryptionStrategy) {
+                                    byte[] key = new byte[16];
+                                    new Random().nextBytes(key);
+                                    db.setEncryptionKey(key);
+                                    System.out.println("Generated AES key: " + new String(key));
+                                } else {
+                                    System.out.println("AES algorithm must be set before generating a key.");
+                                }
+                                break;
+                        }
+                        break;
                     case "search":
                         if (parts.length < 2) {
                             System.out.println("Usage: search [options]");
@@ -231,7 +363,33 @@ public class Main {
         System.out.println("list, -l - Show all staged key-value pairs (uncommitted changes are included)");
         System.out.println("show, -s - Displays the committed database state");
         System.out.println("search - Displays menu");
+        System.out.println("encrypt - Manage encryption settings");
+        System.out.println("  encrypt enable - Enable encryption with the current strategy and key");
+        System.out.println("  encrypt disable - Disable encryption");
+        System.out.println("  encrypt set_algorithm <algorithm_keyword> - Set the encryption algorithm");
+        System.out.println("    Available algorithms: NO, XOR, AES");
+        System.out.println("  encrypt set_key <key> - Set the encryption key (16-byte for AES)");
+        System.out.println("  encrypt generate_key - Generate a random 16-byte key for AES");
         System.out.println("help, -h - Show this help message");
         System.out.println("exit, -x - Exit the program");
+    }
+    public static EncryptionStrategy loadEncryptionStrategy(String className) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            if (EncryptionStrategy.class.isAssignableFrom(clazz)) {
+                return (EncryptionStrategy) clazz.getDeclaredConstructor().newInstance();
+            } else {
+                throw new IllegalArgumentException("Class does not implement EncryptionStrategy.");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error loading encryption strategy: " + e.getMessage());
+        }
+    }
+    private static final Map<String, Class<? extends EncryptionStrategy>> ENCRYPTION_ALGORITHMS = new HashMap<>();
+
+    static {
+        ENCRYPTION_ALGORITHMS.put("NO", NoEncryptionStrategy.class);
+        ENCRYPTION_ALGORITHMS.put("XOR", XOREncryptionStrategy.class);
+        ENCRYPTION_ALGORITHMS.put("AES", AESEncryptionStrategy.class);
     }
 }

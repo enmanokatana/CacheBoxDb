@@ -1,65 +1,69 @@
 package org.athens;
 
+import org.athens.utils.EncryptionStrategy;
+import org.athens.utils.EncryptionUtils;
+
 import java.io.*;
 import java.util.*;
 
 public class Storage {
     private final String dbFile;
+    private  boolean encryptionEnabled;
+    private  byte[]  encryptionKey;
+    private  EncryptionStrategy encryptionStrategy;
 
-    public Storage(String dbFile) {
+
+    public Storage(String dbFile, boolean encryptionEnabled, byte[]  encryptionKey, EncryptionStrategy encryptionStrategy) {
         this.dbFile = dbFile;
+        this.encryptionEnabled = encryptionEnabled;
+        this.encryptionKey = encryptionKey;
+        this.encryptionStrategy = encryptionStrategy;
     }
-
     public Map<String, CacheValue> loadFromDisk() {
         Map<String, CacheValue> store = new HashMap<>();
-        try {
-            if (!new File(dbFile).exists()) {
-                return store;
+        try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
+            String header = reader.readLine();
+            if (header == null) {
+                return loadOldFormat(reader);
             }
-            try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    // Split the line by "=", expecting key and value parts
-                    String[] keyValue = line.split("=", 2);
-                    if (keyValue.length != 2) {
-                        throw new IllegalArgumentException("Invalid format: " + line);
-                    }
-                    String key = keyValue[0];
-                    String valueData = keyValue[1];
-                    // Split the value data by ":", expecting type, version, and value
-                    String[] parts = valueData.split(":", 3);
-                    if (parts.length != 3) {
-                        throw new IllegalArgumentException("Invalid format: " + valueData);
-                    }
-                    CacheValue.Type type = CacheValue.Type.valueOf(parts[0]);
-                    int version = Integer.parseInt(parts[1]);
-                    String value = parts[2];
-                    // Deserialize based on type
-                    CacheValue cacheValue;
-                    switch (type) {
-                        case STRING:
-                            cacheValue = CacheValue.of(version, value);
-                            break;
-                        case INTEGER:
-                            cacheValue = CacheValue.of(version, Integer.parseInt(value));
-                            break;
-                        case BOOLEAN:
-                            cacheValue = CacheValue.of(version, Boolean.parseBoolean(value));
-                            break;
-                        case LIST:
-                            cacheValue = CacheValue.of(version, Arrays.asList(value.split(",")));
-                            break;
-                        case NULL:
-                            cacheValue = CacheValue.ofNull(version);
-                            break;
-                        default:
-                            throw new IllegalArgumentException("Unknown type: " + type);
-                    }
+            String[] headerParts = header.split(",");
+            String versionPart = headerParts[0];
+            String encryptionPart = headerParts[1];
+            boolean fileEncrypted = Boolean.parseBoolean(encryptionPart.split("=")[1]);
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] keyValue = line.split("=", 2);
+                String key = keyValue[0];
+                String valueData = keyValue[1];
+                if (fileEncrypted) {
+                    byte[] encryptedData = Base64.getDecoder().decode(valueData);
+                    byte[] decryptedData = encryptionStrategy.decrypt(encryptedData, encryptionKey);
+                    String serialized = new String(decryptedData);
+                    CacheValue cacheValue = CacheValue.deserialize(serialized);
+                    store.put(key, cacheValue);
+                } else {
+                    CacheValue cacheValue = CacheValue.deserialize(valueData);
                     store.put(key, cacheValue);
                 }
             }
         } catch (IOException e) {
             throw new RuntimeException("Error loading database: " + e.getMessage());
+        }
+        return store;
+    }
+
+    private Map<String, CacheValue> loadOldFormat(BufferedReader reader) throws IOException {
+        // Implement loading logic for files without headers
+        // Assume no encryption
+        Map<String, CacheValue> store = new HashMap<>();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            String[] keyValue = line.split("=", 2);
+            String key = keyValue[0];
+            String valueData = keyValue[1];
+            CacheValue cacheValue = CacheValue.deserialize(valueData);
+            store.put(key, cacheValue);
         }
         return store;
     }
@@ -136,14 +140,31 @@ public class Storage {
         Map<String, CacheValue> deletedValues = new HashMap<>();
     }
 
+
     public void saveToDisk(Map<String, CacheValue> store) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(dbFile))) {
+            writer.write("version=2,encryptionEnabled=" + encryptionEnabled + "\n");
             for (Map.Entry<String, CacheValue> entry : store.entrySet()) {
-                writer.write(entry.getKey() + "=" + entry.getValue().serialize());
-                writer.newLine();
+                String serializedValue = entry.getValue().serialize();
+                if (encryptionEnabled) {
+                    byte[] encryptedData = encryptionStrategy.encrypt(serializedValue.getBytes(), encryptionKey);
+                    serializedValue = Base64.getEncoder().encodeToString(encryptedData);
+                }
+                writer.write(entry.getKey() + "=" + serializedValue + "\n");
             }
         } catch (IOException e) {
             throw new RuntimeException("Error saving database: " + e.getMessage());
         }
+    }
+    public void setEncryptionEnabled(boolean encryptionEnabled) {
+        this.encryptionEnabled = encryptionEnabled;
+    }
+
+    public void setEncryptionKey(byte[] encryptionKey) {
+        this.encryptionKey = encryptionKey;
+    }
+
+    public void setEncryptionStrategy(EncryptionStrategy encryptionStrategy) {
+        this.encryptionStrategy = encryptionStrategy;
     }
 }
