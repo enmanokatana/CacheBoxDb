@@ -1,61 +1,54 @@
 package org.athens;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import org.athens.utils.AESEncryptionStrategy;
 import org.athens.utils.EncryptionStrategy;
-import org.athens.utils.XOREncryptionStrategy;
 
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 public class CacheBox {
-    private final Cache<String, CacheValue> globalStore;
+    private final LRUCache<String, CacheValue> cache;
     private final ConcurrentHashMap<String, String> keyIndex = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Integer> valueIndex = new ConcurrentHashMap<>();
     private final Storage storage;
     private final TransactionManager transactionManager;
     private EncryptionStrategy encryptionStrategy;
+    private final String dbFile;
 
     private boolean encryptionEnabled;
     private byte[] encryptionKey;
 
-    public CacheBox(String dbFile, boolean encryptionEnabled, byte[] encryptionKey, EncryptionStrategy encryptionStrategy) {
+    public CacheBox(String dbFile, boolean encryptionEnabled, byte[] encryptionKey, EncryptionStrategy encryptionStrategy, int maxSize) {
+        this.dbFile = dbFile;
         this.storage = new Storage(dbFile, encryptionEnabled, encryptionKey, encryptionStrategy);
-        this.globalStore = Caffeine.newBuilder()
-                .maximumSize(1000)
-                .expireAfterAccess(10, TimeUnit.MINUTES)
-                .build();
-        this.transactionManager = new TransactionManager(globalStore);
+        this.cache = new LRUCache<>(maxSize);
+        this.transactionManager = new TransactionManager(cache);
         this.encryptionEnabled = encryptionEnabled;
         this.encryptionKey = encryptionKey;
         this.encryptionStrategy = encryptionStrategy;
 
-        storage.loadWithRecovery(globalStore.asMap());
+        storage.loadWithRecovery(cache);
         initializeIndexes();
     }
 
-    public CacheBox(String dbFile) {
+    public CacheBox(String dbFile, int maxSize) {
+        this.dbFile = dbFile;
         byte[] key = new SecureRandom().generateSeed(16);
         EncryptionStrategy strategy = new AESEncryptionStrategy();
         this.storage = new Storage(dbFile, true, key, strategy);
-        this.globalStore = Caffeine.newBuilder()
-                .maximumSize(1000)
-                .expireAfterAccess(10, TimeUnit.MINUTES)
-                .build();
-        this.transactionManager = new TransactionManager(globalStore);
+        this.cache = new LRUCache<>(maxSize);
+        this.transactionManager = new TransactionManager(cache);
         this.encryptionEnabled = true;
         this.encryptionKey = key;
         this.encryptionStrategy = strategy;
-        storage.loadWithRecovery(globalStore.asMap());
+        storage.loadWithRecovery(cache);
         initializeIndexes();
     }
 
     private void initializeIndexes() {
-        for (Map.Entry<String, CacheValue> entry : globalStore.asMap().entrySet()) {
+        for (Map.Entry<String, CacheValue> entry : cache.entrySet()) {
             updateIndexes(entry.getKey(), entry.getValue());
         }
     }
@@ -88,7 +81,7 @@ public class CacheBox {
 
     public void commit() {
         transactionManager.commit();
-        storage.saveToDisk(globalStore.asMap()); // Persist changes
+        storage.saveToDisk(cache);
     }
 
     public void rollback() {
@@ -111,7 +104,7 @@ public class CacheBox {
     }
 
     public Map<String, CacheValue> getCommittedState() {
-        return new HashMap<>(globalStore.asMap()); // Return a copy to prevent external modification
+        return new HashMap<>(cache);
     }
 
     public Map<String, CacheValue> searchCommitted(CacheQuery query) {
@@ -120,7 +113,7 @@ public class CacheBox {
         if (query.getPattern() != null) {
             for (String indexedKey : keyIndex.keySet()) {
                 if (indexedKey.matches(query.getPattern())) {
-                    results.put(indexedKey, globalStore.getIfPresent(indexedKey));
+                    results.put(indexedKey, cache.get(indexedKey));
                 }
             }
         }
@@ -130,7 +123,7 @@ public class CacheBox {
                 Integer intValue = entry.getValue();
                 if ((query.getMinValue() == null || intValue >= query.getMinValue()) &&
                         (query.getMaxValue() == null || intValue <= query.getMaxValue())) {
-                    results.put(entry.getKey(), globalStore.getIfPresent(entry.getKey()));
+                    results.put(entry.getKey(), cache.get(entry.getKey()));
                 }
             }
         }
@@ -220,7 +213,7 @@ public class CacheBox {
     }
 
     public Map<String, CacheValue> getGlobalStore() {
-        return globalStore.asMap();
+        return cache;
     }
 
     public Storage getStorage() {
@@ -241,5 +234,9 @@ public class CacheBox {
 
     public byte[] getEncryptionKey() {
         return encryptionKey;
+    }
+
+    public String getDbFile() {
+        return dbFile;
     }
 }

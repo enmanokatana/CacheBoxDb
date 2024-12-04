@@ -14,6 +14,7 @@ public class Main {
 
     public static void main(String[] args) {
         initializeCacheBox();
+        MonitoringService monitoringService = new MonitoringService(cacheBox.getShards());
         Scanner scanner = new Scanner(System.in);
 
         System.out.println("Welcome to CacheBox v2.0 - ACID-compliant Key-Value Database");
@@ -49,6 +50,29 @@ public class Main {
                     case "begin", "-b":
                         cacheBox.beginTransaction();
                         System.out.println("Transaction started.");
+                        break;
+                    case "snapshot_performance","sp":
+                        System.out.println("Snapshot of current performance metrics:");
+                        System.out.println(monitoringService.getSnapshotMetrics());
+                        break;
+
+                    case "live_performance","lp":
+                        if (monitoringService.isLiveMonitoringActive()) {
+                            System.out.println("Live monitoring is already active.");
+                            break;
+                        }
+                        monitoringService.setLiveMonitoringActive(true);
+                        System.out.println("Starting live performance monitoring...");
+                        monitoringService.startLiveMonitoring();
+                        break;
+
+                    case "stop_lp":
+                        if (!monitoringService.isLiveMonitoringActive()) {
+                            System.out.println("Live monitoring is not active.");
+                            break;
+                        }
+                        monitoringService.setLiveMonitoringActive(false);
+                        monitoringService.stopLiveMonitoring();
                         break;
 
                     case "commit", "-c":
@@ -339,15 +363,17 @@ public class Main {
     private static void initializeCacheBox() {
         byte[] encryptionKey = new SecureRandom().generateSeed(16);
         EncryptionStrategy encryptionStrategy = new AESEncryptionStrategy();
+        boolean encryptionEnabled = true;
+        int maxSize = 1000;
+
         List<ShardedCacheBox> cacheBoxes = Arrays.asList(
-                new ShardedCacheBox(4, "db/shard1_", encryptionStrategy, encryptionKey),
-                new ShardedCacheBox(4, "db/shard2_", encryptionStrategy, encryptionKey),
-                new ShardedCacheBox(4, "db/shard3_", encryptionStrategy, encryptionKey)
+                new ShardedCacheBox(4, "shard1_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
+                new ShardedCacheBox(4, "shard2_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
+                new ShardedCacheBox(4, "shard3_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize)
         );
 
-        loadBalancer = new LoadBalancer(cacheBoxes);
+        loadBalancer = new LoadBalancer(cacheBoxes, Arrays.asList(1, 1, 1)); // Equal weights for simplicity
         cacheBox = loadBalancer.getNextCacheBox();
-        cacheBox.setEncryptionEnabled(true); // Ensure encryption is enabled on the selected shard
     }
 
     private static void printHelp() {
@@ -373,21 +399,10 @@ public class Main {
         System.out.println("    Available algorithms: NO, XOR, AES");
         System.out.println("  encrypt set_key <key> - Set the encryption key (16-byte for AES)");
         System.out.println("  encrypt generate_key - Generate a random 16-byte key for AES");
-        System.out.println("help, -h - Show this help message");
+        System.out.println("snapshot performance - Display a snapshot of current performance metrics");
+        System.out.println("live performance - Start live performance monitoring");
+        System.out.println("stop live performance - Stop live performance monitoring");        System.out.println("help, -h - Show this help message");
         System.out.println("exit, -x - Exit the program");
-    }
-
-    public static EncryptionStrategy loadEncryptionStrategy(String className) {
-        try {
-            Class<?> clazz = Class.forName(className);
-            if (EncryptionStrategy.class.isAssignableFrom(clazz)) {
-                return (EncryptionStrategy) clazz.getDeclaredConstructor().newInstance();
-            } else {
-                throw new IllegalArgumentException("Class does not implement EncryptionStrategy.");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Error loading encryption strategy: " + e.getMessage());
-        }
     }
 
     private static final Map<String, Class<? extends EncryptionStrategy>> ENCRYPTION_ALGORITHMS = new HashMap<>();

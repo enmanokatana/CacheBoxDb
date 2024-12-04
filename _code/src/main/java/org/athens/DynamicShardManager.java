@@ -8,16 +8,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ShardedCacheBox {
+public class DynamicShardManager {
     private final Map<Integer, CacheBox> shards;
     private final ConsistentHashing consistentHashing;
+    private final int initialNumberOfShards;
     private final EncryptionStrategy encryptionStrategy;
     private final boolean encryptionEnabled;
     private final byte[] encryptionKey;
     private final int maxSize;
 
-    public ShardedCacheBox(int initialNumberOfShards, String dbFilePrefix, EncryptionStrategy encryptionStrategy, boolean encryptionEnabled, byte[] encryptionKey, int maxSize) {
+    public DynamicShardManager(int initialNumberOfShards, String dbFilePrefix, EncryptionStrategy encryptionStrategy, boolean encryptionEnabled, byte[] encryptionKey, int maxSize) {
         this.shards = new ConcurrentHashMap<>();
+        this.initialNumberOfShards = initialNumberOfShards;
         this.encryptionStrategy = encryptionStrategy;
         this.encryptionEnabled = encryptionEnabled;
         this.encryptionKey = encryptionKey;
@@ -93,22 +95,6 @@ public class ShardedCacheBox {
         return results;
     }
 
-    public Map<String, CacheValue> searchStaged(CacheQuery query) {
-        Map<String, CacheValue> results = new HashMap<>();
-        for (CacheBox shard : shards.values()) {
-            results.putAll(shard.searchStaged(query));
-        }
-        return results;
-    }
-
-    public Map<String, CacheValue> searchCommitted(CacheQuery query) {
-        Map<String, CacheValue> results = new HashMap<>();
-        for (CacheBox shard : shards.values()) {
-            results.putAll(shard.searchCommitted(query));
-        }
-        return results;
-    }
-
     public void addShard() {
         int newShardId = shards.size();
         CacheBox newShard = new CacheBox("shard" + newShardId + ".cbx", encryptionEnabled, encryptionKey, encryptionStrategy, maxSize);
@@ -122,33 +108,4 @@ public class ShardedCacheBox {
         consistentHashing.remove(shardToRemove);
     }
 
-    public void setEncryptionEnabled(boolean encryptionEnabled) {
-        for (CacheBox shard : shards.values()) {
-            shard.setEncryptionEnabled(encryptionEnabled);
-        }
-    }
-
-    public byte[] getEncryptionKey() {
-        return encryptionKey;
-    }
-
-    public void setEncryptionKey(byte[] encryptionKey) {
-        for (CacheBox shard : shards.values()) {
-            shard.setEncryptionKey(encryptionKey);
-        }
-    }
-
-    public void setEncryptionStrategy(EncryptionStrategy encryptionStrategy) {
-        for (CacheBox shard : shards.values()) {
-            shard.setEncryptionStrategy(encryptionStrategy);
-        }
-    }
-
-    public EncryptionStrategy getEncryptionStrategy() {
-        return encryptionStrategy;
-    }
-
-    public Map<Integer, CacheBox> getShards() {
-        return shards;
-    }
 }

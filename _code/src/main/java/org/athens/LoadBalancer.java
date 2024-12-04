@@ -2,18 +2,14 @@ package org.athens;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-
 public class LoadBalancer {
-    private final List<ShardedCacheBox> cacheBoxes;
-    private final AtomicInteger currentIndex = new AtomicInteger(0);
+    private final WeightedRoundRobinLoadBalancer weightedRoundRobinLoadBalancer;
 
-    public LoadBalancer(List<ShardedCacheBox> cacheBoxes) {
-        this.cacheBoxes = cacheBoxes;
+    public LoadBalancer(List<ShardedCacheBox> cacheBoxes, List<Integer> weights) {
+        this.weightedRoundRobinLoadBalancer = new WeightedRoundRobinLoadBalancer(cacheBoxes, weights);
     }
 
     public ShardedCacheBox getNextCacheBox() {
-        int index = currentIndex.getAndIncrement() % cacheBoxes.size();
-        return cacheBoxes.get(index);
+        return weightedRoundRobinLoadBalancer.getNextCacheBox();
     }
-
 }
