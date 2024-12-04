@@ -6,14 +6,14 @@ import org.athens.utils.NoEncryptionStrategy;
 import org.athens.utils.XOREncryptionStrategy;
 
 import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 
 public class Main {
+    private static ShardedCacheBox cacheBox;
+    private static LoadBalancer loadBalancer;
+
     public static void main(String[] args) {
-        CacheBox db = new CacheBox("cachebox.cbx");
+        initializeCacheBox();
         Scanner scanner = new Scanner(System.in);
 
         System.out.println("Welcome to CacheBox v2.0 - ACID-compliant Key-Value Database");
@@ -42,31 +42,22 @@ public class Main {
 
                     case "show", "-s":
                         System.out.println("Committed database state:");
-                        Map<String, CacheValue> committedState = db.getCommittedState();
-                        if (committedState.isEmpty()) {
-                            System.out.println("The database is empty.");
-                        } else {
-                            for (Map.Entry<String, CacheValue> entry : committedState.entrySet()) {
-                                System.out.printf("%s (%s): %s%n",
-                                        entry.getKey(),
-                                        entry.getValue().getType(),
-                                        entry.getValue().asString());
-                            }
-                        }
+                        cacheBox.getCommittedState().forEach((key, value) ->
+                                System.out.printf("%s (%s): %s%n", key, value.getType(), value.asString()));
                         break;
 
                     case "begin", "-b":
-                        db.beginTransaction();
+                        cacheBox.beginTransaction();
                         System.out.println("Transaction started.");
                         break;
 
                     case "commit", "-c":
-                        db.commit();
+                        cacheBox.commit();
                         System.out.println("Transaction committed.");
                         break;
 
                     case "rollback", "-r":
-                        db.rollback();
+                        cacheBox.rollback();
                         System.out.println("Transaction rolled back.");
                         break;
 
@@ -75,7 +66,7 @@ public class Main {
                             System.out.println("Usage: put <type> <key> <value>");
                             break;
                         }
-                        if (!db.isTransactionActive()) {
+                        if (!cacheBox.isTransactionActive()) {
                             System.out.println("Error: Start a transaction using 'begin' first.");
                             break;
                         }
@@ -86,16 +77,16 @@ public class Main {
 
                         switch (inputType) {
                             case "string":
-                                db.put(inputKey, CacheValue.of(0, inputValue)); // Use version 0
+                                cacheBox.put(inputKey, CacheValue.of(0, inputValue)); // Use version 0
                                 break;
                             case "int":
-                                db.put(inputKey, CacheValue.of(0, Integer.parseInt(inputValue)));
+                                cacheBox.put(inputKey, CacheValue.of(0, Integer.parseInt(inputValue)));
                                 break;
                             case "bool":
-                                db.put(inputKey, CacheValue.of(0, Boolean.parseBoolean(inputValue)));
+                                cacheBox.put(inputKey, CacheValue.of(0, Boolean.parseBoolean(inputValue)));
                                 break;
                             case "list":
-                                db.put(inputKey, CacheValue.of(0, java.util.Arrays.asList(inputValue.split(","))));
+                                cacheBox.put(inputKey, CacheValue.of(0, Arrays.asList(inputValue.split(","))));
                                 break;
                             default:
                                 System.out.println("Unknown type. Use: string, int, bool, or list");
@@ -109,11 +100,11 @@ public class Main {
                             System.out.println("Usage: get <key>");
                             break;
                         }
-                        if (!db.isTransactionActive()) {
+                        if (!cacheBox.isTransactionActive()) {
                             System.out.println("Error: Start a transaction using 'begin' first.");
                             break;
                         }
-                        CacheValue getValue = db.get(parts[1]);
+                        CacheValue getValue = cacheBox.get(parts[1]);
                         if (getValue != null) {
                             System.out.println("Value: " + getValue.asString());
                         } else {
@@ -126,13 +117,14 @@ public class Main {
                             System.out.println("Usage: delete <key>");
                             break;
                         }
-                        if (!db.isTransactionActive()) {
+                        if (!cacheBox.isTransactionActive()) {
                             System.out.println("Error: Start a transaction using 'begin' first.");
                             break;
                         }
-                        db.delete(parts[1]);
+                        cacheBox.delete(parts[1]);
                         System.out.println("Key staged for deletion (uncommitted).");
                         break;
+
                     case "encrypt":
                         if (parts.length < 2) {
                             printHelp();
@@ -141,11 +133,11 @@ public class Main {
                         String subCommand = parts[1];
                         switch (subCommand.toLowerCase()) {
                             case "enable":
-                                db.setEncryptionEnabled(true);
+                                cacheBox.setEncryptionEnabled(true);
                                 System.out.println("Encryption enabled.");
                                 break;
                             case "disable":
-                                db.setEncryptionEnabled(false);
+                                cacheBox.setEncryptionEnabled(false);
                                 System.out.println("Encryption disabled.");
                                 break;
                             case "set_algorithm":
@@ -156,7 +148,7 @@ public class Main {
                                 String algorithmKeyword = parts[2].toUpperCase();
                                 if (ENCRYPTION_ALGORITHMS.containsKey(algorithmKeyword)) {
                                     if (algorithmKeyword.equals("AES")) {
-                                        if (db.getEncryptionKey() == null || db.getEncryptionKey().length != 16) {
+                                        if (cacheBox.getEncryptionKey() == null || cacheBox.getEncryptionKey().length != 16) {
                                             System.out.println("AES requires a 16-byte key.");
                                             System.out.println("Do you want to set a key now? (yes/no)");
                                             String choice = scanner.nextLine().trim().toLowerCase();
@@ -167,7 +159,7 @@ public class Main {
                                                     if (keyOption.equals("generate")) {
                                                         byte[] key = new byte[16];
                                                         new SecureRandom().nextBytes(key);
-                                                        db.setEncryptionKey(key);
+                                                        cacheBox.setEncryptionKey(key);
                                                         System.out.println("Generated AES key: " + new String(key));
                                                         break;
                                                     } else if (keyOption.equals("enter")) {
@@ -180,13 +172,13 @@ public class Main {
                                                             }
                                                             byte[] keyBytes = keyInput.getBytes();
                                                             if (keyBytes.length == 16) {
-                                                                db.setEncryptionKey(keyBytes);
+                                                                cacheBox.setEncryptionKey(keyBytes);
                                                                 break;
                                                             } else {
                                                                 System.out.println("Invalid key length. Please enter a 16-byte key.");
                                                             }
                                                         }
-                                                        if (db.getEncryptionKey() != null && db.getEncryptionKey().length == 16) {
+                                                        if (cacheBox.getEncryptionKey() != null && cacheBox.getEncryptionKey().length == 16) {
                                                             break;
                                                         } else {
                                                             System.out.println("AES setup aborted.");
@@ -204,11 +196,11 @@ public class Main {
                                                 break;
                                             }
                                         }
-                                        if (db.getEncryptionKey() != null && db.getEncryptionKey().length == 16) {
+                                        if (cacheBox.getEncryptionKey() != null && cacheBox.getEncryptionKey().length == 16) {
                                             try {
                                                 EncryptionStrategy strategy = new AESEncryptionStrategy();
-                                                db.setEncryptionStrategy(strategy);
-                                                db.setEncryptionEnabled(true);
+                                                cacheBox.setEncryptionStrategy(strategy);
+                                                cacheBox.setEncryptionEnabled(true);
                                                 System.out.println("Encryption algorithm set to AES.");
                                             } catch (Exception e) {
                                                 System.out.println("Error setting AES encryption strategy: " + e.getMessage());
@@ -220,8 +212,8 @@ public class Main {
                                         try {
                                             Class<? extends EncryptionStrategy> strategyClass = ENCRYPTION_ALGORITHMS.get(algorithmKeyword);
                                             EncryptionStrategy strategy = strategyClass.getDeclaredConstructor().newInstance();
-                                            db.setEncryptionStrategy(strategy);
-                                            db.setEncryptionEnabled(true);
+                                            cacheBox.setEncryptionStrategy(strategy);
+                                            cacheBox.setEncryptionEnabled(true);
                                             System.out.println("Encryption algorithm set to " + algorithmKeyword);
                                         } catch (Exception e) {
                                             System.out.println("Error setting encryption strategy: " + e.getMessage());
@@ -239,18 +231,18 @@ public class Main {
                                 }
                                 String keyInput = parts[2];
                                 byte[] keyBytes = keyInput.getBytes();
-                                if (db.getEncryptionStrategy() instanceof AESEncryptionStrategy && keyBytes.length != 16) {
+                                if (cacheBox.getEncryptionStrategy() instanceof AESEncryptionStrategy && keyBytes.length != 16) {
                                     System.out.println("Invalid key length for AES. Please provide a 16-byte key.");
                                 } else {
-                                    db.setEncryptionKey(keyBytes);
+                                    cacheBox.setEncryptionKey(keyBytes);
                                     System.out.println("Encryption key set.");
                                 }
                                 break;
                             case "generate_key":
-                                if (db.getEncryptionStrategy() instanceof AESEncryptionStrategy) {
+                                if (cacheBox.getEncryptionStrategy() instanceof AESEncryptionStrategy) {
                                     byte[] key = new byte[16];
                                     new Random().nextBytes(key);
-                                    db.setEncryptionKey(key);
+                                    cacheBox.setEncryptionKey(key);
                                     System.out.println("Generated AES key: " + new String(key));
                                 } else {
                                     System.out.println("AES algorithm must be set before generating a key.");
@@ -258,6 +250,7 @@ public class Main {
                                 break;
                         }
                         break;
+
                     case "search":
                         if (parts.length < 2) {
                             System.out.println("Usage: search [options]");
@@ -305,11 +298,11 @@ public class Main {
                             CacheQuery query = queryBuilder.build();
 
                             if (searchStaged) {
-                                results = db.searchStaged(query);
+                                results = cacheBox.searchStaged(query);
                             } else if (searchCommitted) {
-                                results = db.searchCommitted(query);
+                                results = cacheBox.searchCommitted(query);
                             } else {
-                                results = db.search(query); // Default: Search both
+                                results = cacheBox.search(query); // Default: Search both
                             }
 
                             if (results.isEmpty()) {
@@ -325,17 +318,13 @@ public class Main {
                         break;
 
                     case "list", "-l":
-                        if (!db.isTransactionActive()) {
+                        if (!cacheBox.isTransactionActive()) {
                             System.out.println("Error: Start a transaction using 'begin' first.");
                             break;
                         }
                         System.out.println("Current staged state (uncommitted):");
-                        for (Map.Entry<String, CacheValue> entry : db.getStagedState().entrySet()) {
-                            System.out.printf("%s (%s): %s%n",
-                                    entry.getKey(),
-                                    entry.getValue().getType(),
-                                    entry.getValue().asString());
-                        }
+                        cacheBox.getStagedState().forEach((key, value) ->
+                                System.out.printf("%s (%s): %s%n", key, value.getType(), value.asString()));
                         break;
 
                     default:
@@ -345,6 +334,20 @@ public class Main {
                 System.out.println("Error: " + e.getMessage());
             }
         }
+    }
+
+    private static void initializeCacheBox() {
+        byte[] encryptionKey = new SecureRandom().generateSeed(16);
+        EncryptionStrategy encryptionStrategy = new AESEncryptionStrategy();
+        List<ShardedCacheBox> cacheBoxes = Arrays.asList(
+                new ShardedCacheBox(4, "db/shard1_", encryptionStrategy, encryptionKey),
+                new ShardedCacheBox(4, "db/shard2_", encryptionStrategy, encryptionKey),
+                new ShardedCacheBox(4, "db/shard3_", encryptionStrategy, encryptionKey)
+        );
+
+        loadBalancer = new LoadBalancer(cacheBoxes);
+        cacheBox = loadBalancer.getNextCacheBox();
+        cacheBox.setEncryptionEnabled(true); // Ensure encryption is enabled on the selected shard
     }
 
     private static void printHelp() {
@@ -373,6 +376,7 @@ public class Main {
         System.out.println("help, -h - Show this help message");
         System.out.println("exit, -x - Exit the program");
     }
+
     public static EncryptionStrategy loadEncryptionStrategy(String className) {
         try {
             Class<?> clazz = Class.forName(className);
@@ -385,6 +389,7 @@ public class Main {
             throw new RuntimeException("Error loading encryption strategy: " + e.getMessage());
         }
     }
+
     private static final Map<String, Class<? extends EncryptionStrategy>> ENCRYPTION_ALGORITHMS = new HashMap<>();
 
     static {

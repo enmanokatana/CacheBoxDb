@@ -1,13 +1,14 @@
 package org.athens;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.github.benmanes.caffeine.cache.Cache;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 public class TransactionManager {
-    private final Map<String, CacheValue> globalStore; // Persistent store
+    private final Cache<String, CacheValue> globalStore; // Persistent store
     private final ThreadLocal<Transaction> currentTransaction = new ThreadLocal<>();
 
-    public TransactionManager(Map<String, CacheValue> globalStore) {
+    public TransactionManager(Cache<String, CacheValue> globalStore) {
         this.globalStore = globalStore;
     }
 

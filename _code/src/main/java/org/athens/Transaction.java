@@ -1,5 +1,7 @@
 package org.athens;
 
+import com.github.benmanes.caffeine.cache.Cache;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -9,7 +11,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 public class Transaction {
-    private final Map<String, CacheValue> globalStore;
+    private final Cache<String, CacheValue> globalStore;
     private final ConcurrentHashMap<String, CacheValue> stagedChanges = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CacheValue> stagedDeletions = new ConcurrentHashMap<>();
     private final Map<String, Integer> readVersions = new HashMap<>();
@@ -18,7 +20,7 @@ public class Transaction {
     private static final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
-    public Transaction(Map<String, CacheValue> globalStore) {
+    public Transaction(Cache<String, CacheValue> globalStore) {
         this.globalStore = globalStore;
         this.txId = TxIdManager.getInstance().getNextTxId();
 
@@ -46,7 +48,7 @@ public class Transaction {
         if (stagedDeletions.containsKey(key)) {
             return null;
         }
-        CacheValue value = globalStore.get(key);
+        CacheValue value = globalStore.getIfPresent(key);
         if (value != null) {
             readVersions.put(key, value.getVersion());
         }
@@ -54,8 +56,8 @@ public class Transaction {
     }
 
     public void delete(String key) {
-        if (globalStore.containsKey(key) || stagedChanges.containsKey(key)) {
-            stagedDeletions.put(key, stagedChanges.getOrDefault(key, globalStore.get(key)));
+        if (globalStore.getIfPresent(key) != null || stagedChanges.containsKey(key)) {
+            stagedDeletions.put(key, stagedChanges.getOrDefault(key, globalStore.getIfPresent(key)));
             stagedChanges.remove(key);
         }
     }
@@ -69,18 +71,18 @@ public class Transaction {
         }
         // First, process deletions
         for (String key : stagedDeletions.keySet()) {
-            CacheValue current = globalStore.get(key);
+            CacheValue current = globalStore.getIfPresent(key);
             int expectedVersion = readVersions.getOrDefault(key, current != null ? current.getVersion() : 0);
             if (current != null && current.getVersion() != expectedVersion) {
                 throw new ConcurrencyException("Conflict on key " + key);
             }
-            globalStore.remove(key);
+            globalStore.invalidate(key);
         }
         // Then, process changes
         for (Map.Entry<String, CacheValue> entry : stagedChanges.entrySet()) {
             String key = entry.getKey();
             CacheValue newValue = entry.getValue();
-            CacheValue current = globalStore.get(key);
+            CacheValue current = globalStore.getIfPresent(key);
             int expectedVersion = readVersions.getOrDefault(key, current != null ? current.getVersion() : 0);
             if (current != null && current.getVersion() != expectedVersion) {
                 throw new ConcurrencyException("Conflict on key " + key);
