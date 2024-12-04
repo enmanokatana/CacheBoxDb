@@ -8,17 +8,17 @@ import java.util.*;
 
 public class Storage {
     private final String dbFile;
-    private  boolean encryptionEnabled;
-    private  byte[]  encryptionKey;
-    private  EncryptionStrategy encryptionStrategy;
+    private boolean encryptionEnabled;
+    private byte[] encryptionKey;
+    private EncryptionStrategy encryptionStrategy;
 
-
-    public Storage(String dbFile, boolean encryptionEnabled, byte[]  encryptionKey, EncryptionStrategy encryptionStrategy) {
+    public Storage(String dbFile, boolean encryptionEnabled, byte[] encryptionKey, EncryptionStrategy encryptionStrategy) {
         this.dbFile = dbFile;
         this.encryptionEnabled = encryptionEnabled;
         this.encryptionKey = encryptionKey;
         this.encryptionStrategy = encryptionStrategy;
     }
+
     public Map<String, CacheValue> loadFromDisk() {
         Map<String, CacheValue> store = new HashMap<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(dbFile))) {
@@ -47,10 +47,25 @@ public class Storage {
                     store.put(key, cacheValue);
                 }
             }
+        } catch (FileNotFoundException e) {
+            createFileIfNotExists();
+            loadFromDisk();
+            //throw new RuntimeException("Error loading database: File not found: " + dbFile, e);
         } catch (IOException e) {
-            throw new RuntimeException("Error loading database: " + e.getMessage());
+            throw new RuntimeException("Error loading database: " + e.getMessage(), e);
         }
         return store;
+    }
+
+    private void createFileIfNotExists() {
+        File file = new File(dbFile);
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                throw new RuntimeException("Error creating database file: " + dbFile, e);
+            }
+        }
     }
 
     private Map<String, CacheValue> loadOldFormat(BufferedReader reader) throws IOException {
@@ -67,6 +82,7 @@ public class Storage {
         }
         return store;
     }
+
     public void loadWithRecovery(Map<String, CacheValue> globalStore) {
         // Load committed data from the database file
         globalStore.putAll(loadFromDisk());
@@ -74,6 +90,7 @@ public class Storage {
         // Replay log file to apply pending changes
         replayLog(globalStore);
     }
+
     private void replayLog(Map<String, CacheValue> globalStore) {
         File logFile = new File("transaction_log.txt");
         if (!logFile.exists()) return;
@@ -134,12 +151,12 @@ public class Storage {
             // Handle exception
         }
     }
+
     private static class TransactionLog {
         Map<String, CacheValue> puts = new HashMap<>();
         Set<String> deletions = new HashSet<>();
         Map<String, CacheValue> deletedValues = new HashMap<>();
     }
-
 
     public void saveToDisk(Map<String, CacheValue> store) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(dbFile))) {
@@ -153,9 +170,10 @@ public class Storage {
                 writer.write(entry.getKey() + "=" + serializedValue + "\n");
             }
         } catch (IOException e) {
-            throw new RuntimeException("Error saving database: " + e.getMessage());
+            throw new RuntimeException("Error saving database: " + e.getMessage(), e);
         }
     }
+
     public void setEncryptionEnabled(boolean encryptionEnabled) {
         this.encryptionEnabled = encryptionEnabled;
     }

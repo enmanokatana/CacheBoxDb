@@ -1,5 +1,7 @@
 package org.athens;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.athens.utils.AESEncryptionStrategy;
 import org.athens.utils.EncryptionStrategy;
 import org.athens.utils.XOREncryptionStrategy;
@@ -7,40 +9,67 @@ import org.athens.utils.XOREncryptionStrategy;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class CacheBox {
-    private final Map<String, CacheValue> globalStore;
+    private final Cache<String, CacheValue> globalStore;
+    private final ConcurrentHashMap<String, String> keyIndex = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> valueIndex = new ConcurrentHashMap<>();
     private final Storage storage;
     private final TransactionManager transactionManager;
-    private  EncryptionStrategy encryptionStrategy;
+    private EncryptionStrategy encryptionStrategy;
 
-    private  boolean encryptionEnabled;
-    private  byte[]  encryptionKey;
+    private boolean encryptionEnabled;
+    private byte[] encryptionKey;
 
-    public CacheBox(String dbFile,boolean encryptionEnabled , byte[]  encryptionKey, EncryptionStrategy encryptionStrategy) {
+    public CacheBox(String dbFile, boolean encryptionEnabled, byte[] encryptionKey, EncryptionStrategy encryptionStrategy) {
         this.storage = new Storage(dbFile, encryptionEnabled, encryptionKey, encryptionStrategy);
-        this.globalStore = storage.loadFromDisk();
+        this.globalStore = Caffeine.newBuilder()
+                .maximumSize(1000)
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .build();
         this.transactionManager = new TransactionManager(globalStore);
         this.encryptionEnabled = encryptionEnabled;
         this.encryptionKey = encryptionKey;
         this.encryptionStrategy = encryptionStrategy;
 
-        storage.loadWithRecovery(globalStore);
-
+        storage.loadWithRecovery(globalStore.asMap());
+        initializeIndexes();
     }
+
     public CacheBox(String dbFile) {
         byte[] key = new SecureRandom().generateSeed(16);
         EncryptionStrategy strategy = new AESEncryptionStrategy();
         this.storage = new Storage(dbFile, true, key, strategy);
-        this.globalStore = storage.loadFromDisk();
+        this.globalStore = Caffeine.newBuilder()
+                .maximumSize(1000)
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .build();
         this.transactionManager = new TransactionManager(globalStore);
         this.encryptionEnabled = true;
         this.encryptionKey = key;
         this.encryptionStrategy = strategy;
-        storage.loadWithRecovery(globalStore);
+        storage.loadWithRecovery(globalStore.asMap());
+        initializeIndexes();
     }
+
+    private void initializeIndexes() {
+        for (Map.Entry<String, CacheValue> entry : globalStore.asMap().entrySet()) {
+            updateIndexes(entry.getKey(), entry.getValue());
+        }
+    }
+
     public void put(String key, CacheValue value) {
         transactionManager.getActiveTransaction().put(key, value);
+        updateIndexes(key, value);
+    }
+
+    private void updateIndexes(String key, CacheValue value) {
+        keyIndex.put(key, key);
+        if (value.getType() == CacheValue.Type.INTEGER) {
+            valueIndex.put(key, (Integer) value.getValue());
+        }
     }
 
     public CacheValue get(String key) {
@@ -49,11 +78,17 @@ public class CacheBox {
 
     public void delete(String key) {
         transactionManager.getActiveTransaction().delete(key);
+        removeIndexes(key);
+    }
+
+    private void removeIndexes(String key) {
+        keyIndex.remove(key);
+        valueIndex.remove(key);
     }
 
     public void commit() {
         transactionManager.commit();
-        storage.saveToDisk(globalStore); // Persist changes
+        storage.saveToDisk(globalStore.asMap()); // Persist changes
     }
 
     public void rollback() {
@@ -67,34 +102,42 @@ public class CacheBox {
     public boolean isTransactionActive() {
         return transactionManager.isTransactionActive();
     }
-    /**
-     * Retrieves the current staged state of the active transaction.
-     * @return A map representing the current staged changes.
-     */
+
     public Map<String, CacheValue> getStagedState() {
         if (!isTransactionActive()) {
             throw new IllegalStateException("No active transaction.");
         }
         return transactionManager.getActiveTransaction().getStagedChanges();
     }
-    /**
-     * Retrieves the current committed state of the database (global store).
-     * This excludes uncommitted changes from any active transaction.
-     */
+
     public Map<String, CacheValue> getCommittedState() {
-        return new HashMap<>(globalStore); // Return a copy to prevent external modification
+        return new HashMap<>(globalStore.asMap()); // Return a copy to prevent external modification
     }
 
-    /**
-     * Search the committed state of the database using the provided query.
-     */
     public Map<String, CacheValue> searchCommitted(CacheQuery query) {
-        return search(query, globalStore);
+        Map<String, CacheValue> results = new HashMap<>();
+
+        if (query.getPattern() != null) {
+            for (String indexedKey : keyIndex.keySet()) {
+                if (indexedKey.matches(query.getPattern())) {
+                    results.put(indexedKey, globalStore.getIfPresent(indexedKey));
+                }
+            }
+        }
+
+        if (query.getMinValue() != null || query.getMaxValue() != null) {
+            for (Map.Entry<String, Integer> entry : valueIndex.entrySet()) {
+                Integer intValue = entry.getValue();
+                if ((query.getMinValue() == null || intValue >= query.getMinValue()) &&
+                        (query.getMaxValue() == null || intValue <= query.getMaxValue())) {
+                    results.put(entry.getKey(), globalStore.getIfPresent(entry.getKey()));
+                }
+            }
+        }
+
+        return results;
     }
 
-    /**
-     * Search the staged changes in the current transaction.
-     */
     public Map<String, CacheValue> searchStaged(CacheQuery query) {
         if (!isTransactionActive()) {
             throw new IllegalStateException("No active transaction.");
@@ -102,9 +145,6 @@ public class CacheBox {
         return search(query, transactionManager.getActiveTransaction().getStagedChanges());
     }
 
-    /**
-     * Search both committed and staged states, combining results.
-     */
     public Map<String, CacheValue> search(CacheQuery query) {
         Map<String, CacheValue> results = new HashMap<>();
 
@@ -120,9 +160,6 @@ public class CacheBox {
         return results;
     }
 
-    /**
-     * Perform a search on the given data map using the provided query.
-     */
     private Map<String, CacheValue> search(CacheQuery query, Map<String, CacheValue> data) {
         Map<String, CacheValue> results = new HashMap<>();
 
@@ -169,9 +206,7 @@ public class CacheBox {
 
     public void setEncryptionStrategy(EncryptionStrategy encryptionStrategy) {
         this.encryptionStrategy = encryptionStrategy;
-        storage.setEncryptionStrategy(
-                encryptionStrategy
-        );
+        storage.setEncryptionStrategy(encryptionStrategy);
     }
 
     public void setEncryptionEnabled(boolean encryptionEnabled) {
@@ -185,7 +220,7 @@ public class CacheBox {
     }
 
     public Map<String, CacheValue> getGlobalStore() {
-        return globalStore;
+        return globalStore.asMap();
     }
 
     public Storage getStorage() {
