@@ -1,4 +1,4 @@
-package org.athens;
+package org.athens.exceptions;
 
 public  class ValidationException extends RuntimeException {
     public ValidationException(String message) {

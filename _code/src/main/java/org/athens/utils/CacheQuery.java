@@ -1,4 +1,4 @@
-package org.athens;
+package org.athens.utils;
 
 public class CacheQuery {
     private final String pattern;
