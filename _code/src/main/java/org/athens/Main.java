@@ -1,9 +1,13 @@
 package org.athens;
 
-import org.athens.utils.AESEncryptionStrategy;
-import org.athens.utils.EncryptionStrategy;
-import org.athens.utils.NoEncryptionStrategy;
-import org.athens.utils.XOREncryptionStrategy;
+import org.athens.db.encryption.AESEncryptionStrategy;
+import org.athens.db.encryption.EncryptionStrategy;
+import org.athens.db.encryption.NoEncryptionStrategy;
+import org.athens.db.encryption.XOREncryptionStrategy;
+import org.athens.db.shrading.LoadBalancer;
+import org.athens.db.shrading.ShardedCacheBox;
+import org.athens.monitoring.MonitoringService;
+import org.athens.utils.*;
 
 import java.security.SecureRandom;
 import java.util.*;
@@ -367,9 +371,9 @@ public class Main {
         int maxSize = 1000;
 
         List<ShardedCacheBox> cacheBoxes = Arrays.asList(
-                new ShardedCacheBox(4, "shard1_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
-                new ShardedCacheBox(4, "shard2_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
-                new ShardedCacheBox(4, "shard3_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize)
+                new ShardedCacheBox(4, "db_files/shard1_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
+                new ShardedCacheBox(4, "db_files/shard2_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize),
+                new ShardedCacheBox(4, "db_files/shard3_", encryptionStrategy, encryptionEnabled, encryptionKey, maxSize)
         );
 
         loadBalancer = new LoadBalancer(cacheBoxes, Arrays.asList(1, 1, 1)); // Equal weights for simplicity

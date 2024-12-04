@@ -1,4 +1,6 @@
-package org.athens;
+package org.athens.db.shrading;
+import org.athens.db.shrading.ShardedCacheBox;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 

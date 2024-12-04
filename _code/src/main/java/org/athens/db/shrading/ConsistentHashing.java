@@ -1,4 +1,6 @@
-package org.athens;
+package org.athens.db.shrading;
+
+import org.athens.db.encryption.core.CacheBox;
 
 import java.util.List;
 import java.util.SortedMap;
