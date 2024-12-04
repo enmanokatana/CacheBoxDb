@@ -1,4 +1,4 @@
-package org.athens.db.shrading;
+package org.athens;
 
 public class ShardingStrategy {
     private final int numberOfShards;

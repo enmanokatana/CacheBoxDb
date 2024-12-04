@@ -1,4 +1,4 @@
-package org.athens.utils;
+package org.athens;
 
 import java.io.Serializable;
 import java.net.URLDecoder;
