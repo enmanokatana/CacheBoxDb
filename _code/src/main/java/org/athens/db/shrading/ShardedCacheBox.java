@@ -1,6 +1,6 @@
 package org.athens.db.shrading;
 
-import org.athens.db.encryption.core.CacheBox;
+import org.athens.db.core.CacheBox;
 import org.athens.utils.CacheQuery;
 import org.athens.utils.CacheValue;
 import org.athens.db.encryption.EncryptionStrategy;

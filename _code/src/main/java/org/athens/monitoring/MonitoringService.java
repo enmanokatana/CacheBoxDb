@@ -1,6 +1,6 @@
 package org.athens.monitoring;
 
-import org.athens.db.encryption.core.CacheBox;
+import org.athens.db.core.CacheBox;
 
 import java.io.File;
 import java.util.Map;
