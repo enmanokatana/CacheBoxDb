@@ -3,7 +3,7 @@ package org.athens.db.core;
 import org.athens.utils.CacheValue;
 
 public class TransactionManager {
-    private final LRUCache<String, CacheValue> globalStore; // Persistent store
+    private final LRUCache<String, CacheValue> globalStore;
     private final ThreadLocal<Transaction> currentTransaction = new ThreadLocal<>();
 
     public TransactionManager(LRUCache<String, CacheValue> globalStore) {

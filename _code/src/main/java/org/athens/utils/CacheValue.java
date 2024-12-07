@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 public class CacheValue implements Serializable {
@@ -14,7 +15,8 @@ public class CacheValue implements Serializable {
         INTEGER,
         BOOLEAN,
         LIST,
-        NULL
+        NULL,
+        BYTES
     }
     private final Type type;
     private final Object value;
@@ -39,7 +41,9 @@ public class CacheValue implements Serializable {
     public static CacheValue of(int version, Integer value) {
         return new CacheValue(version, Type.INTEGER, value);
     }
-
+    public static CacheValue of(int version, byte[] value) {
+        return new CacheValue(version, Type.BYTES, value);
+    }
     public static CacheValue of(int version, Boolean value) {
         return new CacheValue(version, Type.BOOLEAN, value);
     }
@@ -76,7 +80,7 @@ public class CacheValue implements Serializable {
     }
 
     public String serialize() {
-        if (isNull()) return "NULL:" + version + ":null";
+        if (isNull()) return STR."NULL:\{version}:null";
         String encodedValue = URLEncoder.encode(value.toString(), StandardCharsets.UTF_8);
         switch (type) {
             case STRING:
@@ -87,6 +91,8 @@ public class CacheValue implements Serializable {
                 return "BOOLEAN:" + version + ":" + encodedValue;
             case LIST:
                 return "LIST:" + version + ":" + encodedValue;
+            case BYTES:
+                return "BYTES:" + version + ":" + Base64.getEncoder().encodeToString((byte[]) value);
             default:
                 throw new IllegalStateException("Unknown type: " + type);
         }
@@ -113,6 +119,7 @@ public class CacheValue implements Serializable {
             case INTEGER -> of(version, Integer.parseInt(value));
             case BOOLEAN -> of(version, Boolean.parseBoolean(value));
             case LIST -> of(version, Arrays.asList(value.split(",")));
+            case BYTES-> of(version, Base64.getDecoder().decode(value));
             default -> throw new IllegalStateException("Unknown type: " + type);
         };
     }
