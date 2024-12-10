@@ -10,9 +10,14 @@ import java.security.SecureRandom;
 import java.security.Security;
 
 public class AESEncryptionStrategy implements EncryptionStrategy {
-    private static final String ALGORITHM = "AES/GCM/PKCS5Padding";
+    private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12; // 96 bits
     private static final int GCM_TAG_LENGTH = 16; // 128 bits
+
+    // Static block to register BouncyCastle provider once
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
 
     @Override
     public byte[] encrypt(byte[] data, byte[] key) {
@@ -30,8 +35,8 @@ public class AESEncryptionStrategy implements EncryptionStrategy {
             new SecureRandom().nextBytes(iv);
 
             // Initialize cipher
-            Security.addProvider(new BouncyCastleProvider());
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "BC");            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
+            Cipher cipher = Cipher.getInstance(ALGORITHM, "BC");
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
 
             // Encrypt and combine IV with ciphertext
@@ -66,7 +71,7 @@ public class AESEncryptionStrategy implements EncryptionStrategy {
             System.arraycopy(encryptedData, GCM_IV_LENGTH, cipherText, 0, cipherText.length);
 
             // Initialize cipher
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = Cipher.getInstance(ALGORITHM, "BC");
             GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
             cipher.init(Cipher.DECRYPT_MODE, secretKey, parameterSpec);
 

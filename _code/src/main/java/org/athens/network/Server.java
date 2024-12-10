@@ -25,16 +25,46 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * The Server class is responsible for handling incoming connections,
+ * processing requests, and managing responses using NIO selectors.
+ * It utilizes a sharded cache box for data storage and supports
+ * transactions with commit and rollback operations.
+ */
 public class Server implements AutoCloseable {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
 
     // Configurable constants
+    /**
+     * The buffer size used for reading and writing data.
+     */
     private static final int BUFFER_SIZE = 1024 * 1024;
-    private static final int MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // Reduced from 64MB
+
+    /**
+     * The maximum allowed size for a message.
+     */
+    private static final int MAX_MESSAGE_SIZE = 11 * 16 * 1024 * 1024;
+
+    /**
+     * The timeout for shutting down the server.
+     */
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 30;
-    private static final long TRANSACTION_TIMEOUT_MS = 30000; // 30 seconds
-    private static final int CONNECTION_TIMEOUT_MS = 10_000; // 5 seconds connection timeout
-    private static final int MAX_CONNECTIONS = 100; // Maximum concurrent connections
+
+    /**
+     * The timeout for transactions.
+     */
+    private static final long TRANSACTION_TIMEOUT_MS = 30000;
+
+    /**
+     * The connection timeout for socket operations.
+     */
+    private static final int CONNECTION_TIMEOUT_MS = 10_000;
+
+    /**
+     * The maximum number of concurrent connections.
+     */
+    private static final int MAX_CONNECTIONS = 100;
 
     private final Selector selector;
     private final ServerSocketChannel serverChannel;
@@ -46,43 +76,61 @@ public class Server implements AutoCloseable {
     private final Map<String, Long> transactionTimeouts;
     private final ScheduledExecutorService transactionCleaner;
     private final AtomicLong currentConnections;
-    private static class ResponseWrapper {
-        private final Response response;
-        private final SocketChannel channel;
 
-        ResponseWrapper(Response response, SocketChannel channel) {
-            this.response = response;
-            this.channel = channel;
-        }
-
-        public Response getResponse() { return response; }
-        public SocketChannel getChannel() { return channel; }
+    /**
+     * A helper class to wrap the response and the corresponding channel.
+     */
+    private record ResponseWrapper(Response response, SocketChannel channel) {
     }
+
+    /**
+     * A builder class to construct Server instances with various configurations.
+     */
     public static class ServerBuilder {
         private int port = 8080;
         private String host = "localhost";
-        private String dbFilePrefix = "shard";
+        private String dbFilePrefix = "db_files/shard";
         private boolean encryptionEnabled = true;
         private byte[] encryptionKey = new byte[16];
         private int initialShards = 4;
         private int maxSize = 1000;
         private EncryptionStrategy encryptionStrategy = new AESEncryptionStrategy();
 
+        /**
+         * Sets the port for the server to listen on.
+         * @param port the port number
+         * @return the builder instance
+         */
         public ServerBuilder port(int port) {
             this.port = port;
             return this;
         }
 
+        /**
+         * Sets the host address for the server.
+         * @param host the host address
+         * @return the builder instance
+         */
         public ServerBuilder host(String host) {
             this.host = host;
             return this;
         }
 
+        /**
+         * Builds the Server instance with the specified configurations.
+         * @return the Server instance
+         * @throws IOException if an I/O error occurs during initialization
+         */
         public Server build() throws IOException {
             return new Server(this);
         }
     }
 
+    /**
+     * Private constructor for initializing the server with the given builder configuration.
+     * @param builder the ServerBuilder instance containing configuration parameters
+     * @throws IOException if an I/O error occurs during initialization
+     */
     private Server(ServerBuilder builder) throws IOException {
         // Setup enhanced logging
         setupEnhancedLogging();
@@ -133,7 +181,12 @@ public class Server implements AutoCloseable {
                 TRANSACTION_TIMEOUT_MS,
                 TimeUnit.MILLISECONDS
         );
-    }    private void cleanupStaleTransactions() {
+    }
+
+    /**
+     * Cleans up transactions that have timed out.
+     */
+    private void cleanupStaleTransactions() {
         long currentTime = System.currentTimeMillis();
         Iterator<Map.Entry<String, Long>> it = transactionTimeouts.entrySet().iterator();
 
@@ -146,7 +199,10 @@ public class Server implements AutoCloseable {
             }
         }
     }
-    // Enhanced logging setup method
+
+    /**
+     * Sets up enhanced logging configuration.
+     */
     private void setupEnhancedLogging() {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -165,6 +221,12 @@ public class Server implements AutoCloseable {
         rootLogger.detachAndStopAllAppenders();
         rootLogger.addAppender(consoleAppender);
     }
+
+    /**
+     * Handles a put request by storing the key-value pair in the cache.
+     * @param request the put request
+     * @return the response indicating the result of the put operation
+     */
     private Response handlePutRequest(Request request) {
         try {
             if (!shardedCacheBox.isTransactionActive()) {
@@ -173,7 +235,7 @@ public class Server implements AutoCloseable {
 
             String key = request.getPutRequest().getKey();
             byte[] valueBytes = request.getPutRequest().getValue().toByteArray();
-            CacheValue value = CacheValue.of(1, valueBytes);
+            CacheValue value = CacheValue.of(0, valueBytes);
 
             shardedCacheBox.put(key, value);
 
@@ -189,6 +251,10 @@ public class Server implements AutoCloseable {
             return createErrorResponse("Failed to put value: " + e.getMessage(), 500);
         }
     }
+
+    /**
+     * Runs the server loop to accept connections and process requests.
+     */
     public void run() {
         Thread responseHandler = startResponseHandler();
 
@@ -225,14 +291,18 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Starts a thread to handle responses from the response queue.
+     * @return the response handler thread
+     */
     private Thread startResponseHandler() {
         Thread handler = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     ResponseWrapper wrapper = responseQueue.poll(100, TimeUnit.MILLISECONDS);
                     if (wrapper != null) {
-                        logger.debug("Sending response to channel: {}", wrapper.getChannel());
-                        sendResponse(wrapper.getChannel(), wrapper.getResponse());
+                        logger.debug("Sending response to channel: {}", wrapper.channel());
+                        sendResponse(wrapper.channel(), wrapper.response());
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -246,6 +316,10 @@ public class Server implements AutoCloseable {
         return handler;
     }
 
+    /**
+     * Accepts a new connection from a client.
+     * @param key the selection key
+     */
     private void acceptConnection(SelectionKey key) {
         try {
             if (currentConnections.get() >= MAX_CONNECTIONS) {
@@ -272,6 +346,10 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Handles reading data from a client channel.
+     * @param key the selection key
+     */
     private void handleRead(SelectionKey key) {
         SocketChannel clientChannel = (SocketChannel) key.channel();
 
@@ -320,7 +398,14 @@ public class Server implements AutoCloseable {
             logger.error("Error reading from channel", e);
             closeChannel(clientChannel);
         }
-    }    private void processRequest(SocketChannel clientChannel, byte[] data) {
+    }
+
+    /**
+     * Processes a request from a client.
+     * @param clientChannel the client channel
+     * @param data the request data
+     */
+    private void processRequest(SocketChannel clientChannel, byte[] data) {
         totalRequests.incrementAndGet();
 
         try {
@@ -362,7 +447,14 @@ public class Server implements AutoCloseable {
                     clientChannel
             ));
         }
-    }    private Response handleGetRequest(Request request) {
+    }
+
+    /**
+     * Handles a get request by retrieving the value for the given key.
+     * @param request the get request
+     * @return the response containing the value or an error
+     */
+    private Response handleGetRequest(Request request) {
         try {
             if (!shardedCacheBox.isTransactionActive()) {
                 shardedCacheBox.beginTransaction();
@@ -394,6 +486,11 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Handles a delete request by removing the value for the given key.
+     * @param request the delete request
+     * @return the response indicating the result of the delete operation
+     */
     private Response handleDeleteRequest(Request request) {
         try {
             if (!shardedCacheBox.isTransactionActive()) {
@@ -426,6 +523,11 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Handles a commit request by committing the current transaction.
+     * @param request the commit request
+     * @return the response indicating the result of the commit operation
+     */
     private Response handleCommitRequest(Request request) {
         try {
             shardedCacheBox.commit();
@@ -444,7 +546,11 @@ public class Server implements AutoCloseable {
         }
     }
 
-
+    /**
+     * Handles a rollback request by rolling back the current transaction.
+     * @param request the rollback request
+     * @return the response indicating the result of the rollback operation
+     */
     private Response handleRollbackRequest(Request request) {
         try {
             shardedCacheBox.rollback();
@@ -463,6 +569,12 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Creates an error response for a request.
+     * @param message the error message
+     * @param code the error code
+     * @return the error response
+     */
     private Response createErrorResponse(String message, int code) {
         return Response.newBuilder()
                 .setError(KeyValueDB.Error.newBuilder()
@@ -473,8 +585,11 @@ public class Server implements AutoCloseable {
                 .build();
     }
 
-
-
+    /**
+     * Sends a response back to the client.
+     * @param channel the client channel
+     * @param response the response to send
+     */
     private void sendResponse(SocketChannel channel, Response response) {
         try {
             byte[] data = response.toByteArray();
@@ -496,18 +611,26 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * Closes a client channel and decrements the connection count.
+     * @param channel the client channel
+     */
     private void closeChannel(SocketChannel channel) {
         try {
             if (channel != null && channel.isOpen()) {
+                logger.info("Channel closed: {}", channel.getRemoteAddress());
                 channel.close();
                 currentConnections.decrementAndGet();
-               // logger.info("Channel closed: {}", channel.getRemoteAddress());
+
             }
         } catch (IOException e) {
             logger.error("Error closing channel", e);
         }
     }
 
+    /**
+     * Closes the server and releases all resources.
+     */
     @Override
     public void close() {
         logger.info("Initiating server shutdown");
@@ -542,6 +665,9 @@ public class Server implements AutoCloseable {
                 totalRequests.get(), failedRequests.get());
     }
 
+    /**
+     * Shuts down the server by closing the server channel and selector.
+     */
     private void shutdown() {
         isRunning.set(false);
 
@@ -553,6 +679,11 @@ public class Server implements AutoCloseable {
         }
     }
 
+    /**
+     * The main method to start the server.
+     * @param args command-line arguments (not used)
+     * @throws IOException if an I/O error occurs during initialization
+     */
     public static void main(String[] args) throws IOException {
         try (Server server = new ServerBuilder()
                 .port(8080)

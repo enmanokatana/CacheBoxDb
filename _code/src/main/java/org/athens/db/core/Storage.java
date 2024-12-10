@@ -52,7 +52,7 @@ public class Storage {
             loadFromDisk();
             //throw new RuntimeException("Error loading database: File not found: " + dbFile, e);
         } catch (IOException e) {
-            throw new RuntimeException("Error loading database: " + e.getMessage(), e);
+            throw new RuntimeException(STR."Error loading database: \{e.getMessage()}", e);
         }
         return store;
     }
