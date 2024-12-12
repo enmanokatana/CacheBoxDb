@@ -4,6 +4,7 @@ import org.athens.db.encryption.AESEncryptionStrategy;
 import org.athens.db.encryption.EncryptionStrategy;
 import org.athens.db.shrading.LoadBalancer;
 import org.athens.db.shrading.ShardedCacheBox;
+import org.athens.network.commands.CommandFactory;
 import org.athens.utils.CacheValue;
 import org.athens.utils.KeyManager;
 import org.slf4j.Logger;
@@ -19,7 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 
 public class Server {
-    private static final Logger logger = LoggerFactory.getLogger(Server.class);
+    public static final Logger logger = LoggerFactory.getLogger(Server.class);
 
     private static ShardedCacheBox cacheBox;
 
@@ -85,107 +86,26 @@ public class Server {
             }
         }
 
+
         private String processCommand(List<String> commandParts) {
-            if (commandParts.isEmpty()) {
-                logger.warn("Empty command received");
-                return RequestParser.encodeError("Empty command");
-            }
-
-            String action = commandParts.get(0).toUpperCase();
-            logger.debug("Processing action: {}", action);
-
             try {
-                switch (action) {
-                    case "DELETE":
-                        if(commandParts.size() != 2)
-                            return RequestParser.encodeError("DELETE command has insufficient arguments");
-                        cacheBox.beginTransaction();
+                String action = commandParts.getFirst().toUpperCase();
 
-                        if (!cacheBox.isTransactionActive()) {
-                            logger.warn("No transaction active for DELETE command");
-                            return RequestParser.encodeError("No transaction active. Start with 'begin'.");
-                        }
-                        cacheBox.delete(commandParts.get(1));
-                        cacheBox.commit();
-                        return RequestParser.encodeSimpleString("OK");
-                    case "PUT":
-                        if (commandParts.size() < 4) {
-                            logger.warn("PUT command has insufficient arguments");
-                            return RequestParser.encodeError("PUT requires action, type, key, and value");
-                        }
-
-                        cacheBox.beginTransaction();
-                        if (!cacheBox.isTransactionActive()) {
-                            logger.warn("No transaction active for PUT command");
-                            return RequestParser.encodeError("No transaction active. Start with 'begin'.");
-                        }
-
-                        String inputType = commandParts.get(1).toLowerCase();
-                        String inputKey = commandParts.get(2);
-                        String inputValue = commandParts.get(3);
-                        logger.debug("PUT command details: type={}, key={}, value={}", inputType, inputKey, inputValue);
-
-                        switch (inputType) {
-                            case "string":
-                                cacheBox.put(inputKey, CacheValue.of(0, inputValue));
-                                break;
-                            case "int":
-                                cacheBox.put(inputKey, CacheValue.of(0, Integer.parseInt(inputValue)));
-                                break;
-                            case "bool":
-                                cacheBox.put(inputKey, CacheValue.of(0, Boolean.parseBoolean(inputValue)));
-                                break;
-                            case "list":
-                                cacheBox.put(inputKey, CacheValue.of(0, Arrays.asList(inputValue.split(","))));
-                                break;
-                            default:
-                                logger.warn("Unsupported type for PUT command: {}", inputType);
-                                return RequestParser.encodeError("Unknown type. Supported types: string, int, bool, list");
-                        }
-
-                        cacheBox.commit();
-                        logger.info("PUT command successful for key: {}", inputKey);
-                        return RequestParser.encodeSimpleString("OK");
-
-                    case "GET":
-                        if (commandParts.size() < 2) {
-                            logger.warn("GET command has insufficient arguments");
-                            return RequestParser.encodeError("GET requires a key");
-                        }
-
-                        cacheBox.beginTransaction();
-                        if (!cacheBox.isTransactionActive()) {
-                            logger.warn("No transaction active for GET command");
-                            return RequestParser.encodeError("No transaction active. Start with 'begin'.");
-                        }
-
-                        String key = commandParts.get(1);
-                        logger.debug("GET command for key: {}", key);
-
-                        CacheValue getValue = cacheBox.get(key);
-                        cacheBox.commit();
-
-                        if (getValue != null) {
-                            logger.info("GET command successful. Key: {}, Value: {}", key, getValue.asString());
-                            return RequestParser.encodeBulkString(getValue.asString());
-                        } else {
-                            logger.info("GET command failed. Key not found: {}", key);
-                            return RequestParser.encodeSimpleString("NULL");
-                        }
-
-                    default:
-                        logger.warn("Unknown command received: {}", action);
-                        return RequestParser.encodeError("Unknown command: " + action);
+                CacheCommand cmd = CommandFactory.getCommand(action);
+                if (cmd == null) {
+                    logger.warn("Unknown command: {}", action);
+                    return RequestParser.encodeError("Unknown command");
                 }
-            } catch (NumberFormatException e) {
-                logger.error("Invalid number format in command: {}", e.getMessage(), e);
-                return RequestParser.encodeError("Invalid number format: " + e.getMessage());
+
+                return cmd.execute(commandParts.subList(1, commandParts.size()),cacheBox);
             } catch (Exception e) {
-                logger.error("Unexpected error while processing command: {}", e.getMessage(), e);
-                return RequestParser.encodeError("Unexpected error: " + e.getMessage());
+                logger.error("Error processing commandParts: {}", commandParts.toString(), e);
+                return RequestParser.encodeError("Server error occurred");
             }
+
         }
     }
+
 
     private static void initializeCacheBox() {
         byte[] encryptionKey = KeyManager.getOrCreateEncryptionKey();
