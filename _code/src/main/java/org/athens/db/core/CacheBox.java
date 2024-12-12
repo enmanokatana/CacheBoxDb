@@ -214,6 +214,7 @@ public class CacheBox {
         storage.setEncryptionKey(encryptionKey);
     }
 
+
     public Map<String, CacheValue> getGlobalStore() {
         return cache;
     }
