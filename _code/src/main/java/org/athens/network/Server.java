@@ -96,6 +96,18 @@ public class Server {
 
             try {
                 switch (action) {
+                    case "DELETE":
+                        if(commandParts.size() != 2)
+                            return RequestParser.encodeError("DELETE command has insufficient arguments");
+                        cacheBox.beginTransaction();
+
+                        if (!cacheBox.isTransactionActive()) {
+                            logger.warn("No transaction active for DELETE command");
+                            return RequestParser.encodeError("No transaction active. Start with 'begin'.");
+                        }
+                        cacheBox.delete(commandParts.get(1));
+                        cacheBox.commit();
+                        return RequestParser.encodeSimpleString("OK");
                     case "PUT":
                         if (commandParts.size() < 4) {
                             logger.warn("PUT command has insufficient arguments");
