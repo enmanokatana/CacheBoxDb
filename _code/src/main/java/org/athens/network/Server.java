@@ -18,35 +18,79 @@ import java.net.Socket;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Server {
     public static final Logger logger = LoggerFactory.getLogger(Server.class);
-
     private static ShardedCacheBox cacheBox;
+    private static final int PORT = 20029;
+
+    private static final ExecutorService clientHandlerPool =
+            Executors.newThreadPerTaskExecutor(
+                    new ThreadFactory() {
+                        private final AtomicInteger threadCounter = new AtomicInteger(1);
+                        @Override
+                        public Thread newThread(Runnable r) {
+                            Thread thread = new Thread(r);
+                            thread.setName("Client_Handler-"+threadCounter.getAndIncrement());
+                            thread.setUncaughtExceptionHandler((t,e)->
+                                    logger.error("Uncaught exception in thread {}",t.getName(),e)
+                            );
+                            return thread;
+                        }
+                    }
+            );
 
     public static void main(String[] args) {
-        int port = 20029;
         initializeCacheBox();
-        logger.info("Starting Cache Box server on port {}", port);
+        logger.info("Starting Cache Box server on port {}", PORT);
 
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                logger.info("New client connection established: {}", clientSocket.getRemoteSocketAddress());
-                new Thread(new ClientHandler(clientSocket)).start();
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{
+            logger.info("Init server shutdown ...");
+            clientHandlerPool.shutdown();
+            try{
+                if (!clientHandlerPool.awaitTermination(5, TimeUnit.SECONDS)){
+                    clientHandlerPool.shutdownNow();
+                }
+
+            }catch (InterruptedException e){
+                clientHandlerPool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }));
+
+        try(ServerSocket serverSocket = new ServerSocket(PORT)){
+            logger.info("Server started on port {}",PORT);
+            while(!Thread.currentThread().isInterrupted()){
+                try{
+                    Socket clientSocket = serverSocket.accept();
+                    logger.info("New client connection from {}", clientSocket.getRemoteSocketAddress());
+                    clientHandlerPool.submit(new ClientHandler(clientSocket));
+                } catch (IOException e) {
+                    logger.error("Error accepting client connection", e);
+                }
             }
         } catch (IOException e) {
-            logger.error("Server error: {}", e.getMessage(), e);
+            logger.error("Server startup failed", e);
         }
     }
 
     private static class ClientHandler implements Runnable {
         private static final Logger logger = LoggerFactory.getLogger(ClientHandler.class);
+        private static final int SOCKET_TIMEOUT = 30000;
+        private final ExecutorService requestExecutor = Executors.newSingleThreadExecutor();
+
 
         private final Socket clientSocket;
 
         public ClientHandler(Socket clientSocket) {
             this.clientSocket = clientSocket;
+            try {
+                clientSocket.setSoTimeout(SOCKET_TIMEOUT);
+            } catch (IOException e) {
+                logger.warn("Could not set socket timeout", e);
+            }
         }
 
         @Override
@@ -56,32 +100,33 @@ public class Server {
                     OutputStream outputStream = clientSocket.getOutputStream()
             ) {
                 logger.debug("Client handler started for {}", clientSocket.getRemoteSocketAddress());
-                while (true) {
-                    try {
-                        // Parse the client request
+                while (!Thread.currentThread().isInterrupted() &&!clientSocket.isClosed()) {
+                    Future<String> responseFuture = requestExecutor.submit(() -> {
                         List<String> command = RequestParser.parseRequest(inputStream);
-                        logger.debug("Received command: {}", command);
-
-                        // Process the command and get the response
-                        String response = processCommand(command);
-                        logger.debug("Processed command. Response: {}", response);
-
-                        // Send the response back to the client
+                        return processCommand(command);
+                    });
+                    try {
+                        String response = responseFuture.get(5, TimeUnit.SECONDS);
                         outputStream.write(response.getBytes());
-                    } catch (IOException e) {
-                        String errorResponse = RequestParser.encodeError("Invalid request: " + e.getMessage());
-                        outputStream.write(errorResponse.getBytes());
-                        logger.warn("Malformed input from {}: {}", clientSocket.getRemoteSocketAddress(), e.getMessage());
+                        outputStream.flush();
+                    } catch (TimeoutException e) {
+                        logger.warn("Request processing timed out");
+                        outputStream.write("Request timed out".getBytes());
+                        break;
+                    } catch (InterruptedException | ExecutionException e) {
+                        logger.error("Error processing request", e);
+                        break;
                     }
+
                 }
             } catch (IOException e) {
                 logger.error("Client handler error: {}", e.getMessage(), e);
-            } finally {
+            }finally {
+                requestExecutor.shutdown();
                 try {
                     clientSocket.close();
-                    logger.info("Closed connection for {}", clientSocket.getRemoteSocketAddress());
                 } catch (IOException e) {
-                    logger.error("Error closing client socket: {}", e.getMessage(), e);
+                    logger.error("Error closing client socket", e);
                 }
             }
         }
