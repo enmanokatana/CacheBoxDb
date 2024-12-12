@@ -7,9 +7,9 @@ import java.util.List;
 public class RequestParser {
 
     /**
-     * Parses a RESP request from an InputStream.
+     * Parses a CBSP request from an InputStream.
      * @param inputStream The input stream connected to the client.
-     * @return A list of strings representing the parsed RESP command.
+     * @return A list of strings representing the parsed CBSP command.
      * @throws IOException If the input is invalid or cannot be parsed.
      */
     public static List<String> parseRequest(InputStream inputStream) throws IOException {
@@ -24,7 +24,7 @@ public class RequestParser {
             }
 
             if (firstLine.charAt(0) != '*') {
-                throw new IllegalArgumentException("Invalid RESP format: Expected array header '*', got: " + firstLine);
+                throw new IllegalArgumentException("Invalid CBSP format: Expected array header '*', got: " + firstLine);
             }
 
             int numElements;
@@ -38,7 +38,7 @@ public class RequestParser {
             for (int i = 0; i < numElements; i++) {
                 String lengthLine = reader.readLine();
                 if (lengthLine == null || lengthLine.isEmpty() || lengthLine.charAt(0) != '$') {
-                    throw new IllegalArgumentException("Invalid RESP format: Expected bulk string header '$', got: " + lengthLine);
+                    throw new IllegalArgumentException("Invalid CBSP format: Expected bulk string header '$', got: " + lengthLine);
                 }
 
                 int length;
@@ -58,13 +58,13 @@ public class RequestParser {
             }
         } catch (Exception e) {
             // Log and rethrow as an IOException
-            throw new IOException("Error parsing RESP request: " + e.getMessage(), e);
+            throw new IOException("Error parsing CBSP request: " + e.getMessage(), e);
         }
 
         return elements;
     }
 
-    // RESP Encoding Helpers
+    // CBSP Encoding Helpers
     public static String encodeSimpleString(String message) {
         return "+" + message + "\r\n";
     }

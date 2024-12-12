@@ -58,11 +58,11 @@ public class AESEncryptionStrategy implements EncryptionStrategy {
             System.arraycopy(encryptedData, 0, combined, iv.length, encryptedData.length);
 
             // Log encryption details for debugging
-            LOGGER.log(Level.INFO, "Encryption successful");
-            LOGGER.log(Level.FINE, "Input data length: " + data.length);
-            LOGGER.log(Level.FINE, "Encrypted data length: " + combined.length);
-            LOGGER.log(Level.FINE, "IV: " + Base64.getEncoder().encodeToString(iv));
-            LOGGER.log(Level.FINE, "Key hash: " + Arrays.hashCode(key));
+//            LOGGER.log(Level.INFO, "Encryption successful");
+//            LOGGER.log(Level.FINE, "Input data length: " + data.length);
+//            LOGGER.log(Level.FINE, "Encrypted data length: " + combined.length);
+//            LOGGER.log(Level.FINE, "IV: " + Base64.getEncoder().encodeToString(iv));
+//            LOGGER.log(Level.FINE, "Key hash: " + Arrays.hashCode(key));
 
             return combined;
         } catch (Exception e) {
@@ -94,11 +94,11 @@ public class AESEncryptionStrategy implements EncryptionStrategy {
             System.arraycopy(encryptedData, GCM_IV_LENGTH, cipherText, 0, cipherText.length);
 
             // Log decryption details for debugging
-            LOGGER.log(Level.INFO, "Starting decryption");
-            LOGGER.log(Level.FINE, "Encrypted data length: " + encryptedData.length);
-            LOGGER.log(Level.FINE, "Cipher text length: " + cipherText.length);
-            LOGGER.log(Level.FINE, "IV: " + Base64.getEncoder().encodeToString(iv));
-            LOGGER.log(Level.FINE, "Key hash: " + Arrays.hashCode(key));
+//            LOGGER.log(Level.INFO, "Starting decryption");
+//            LOGGER.log(Level.FINE, "Encrypted data length: " + encryptedData.length);
+//            LOGGER.log(Level.FINE, "Cipher text length: " + cipherText.length);
+//            LOGGER.log(Level.FINE, "IV: " + Base64.getEncoder().encodeToString(iv));
+//            LOGGER.log(Level.FINE, "Key hash: " + Arrays.hashCode(key));
 
             // Initialize cipher
             Cipher cipher = Cipher.getInstance(ALGORITHM, "BC");
@@ -108,8 +108,8 @@ public class AESEncryptionStrategy implements EncryptionStrategy {
             // Decrypt
             byte[] decryptedData = cipher.doFinal(cipherText);
 
-            LOGGER.log(Level.INFO, "Decryption successful");
-            LOGGER.log(Level.FINE, "Decrypted data length: " + decryptedData.length);
+//            LOGGER.log(Level.INFO, "Decryption successful");
+//            LOGGER.log(Level.FINE, "Decrypted data length: " + decryptedData.length);
 
             return decryptedData;
         } catch (Exception e) {
