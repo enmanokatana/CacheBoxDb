@@ -1,8 +1,0 @@
-PUT:1:hello:STRING:0:world
-PUT:1:hello:STRING:0:world
-COMMIT:1
-PUT:2:mpuad:STRING:0:sh
-ROLLBACK:2
-PUT:3:h:STRING:0:ma
-PUT:3:h:STRING:0:ma
-COMMIT:3
