@@ -1,0 +1,10 @@
+2024-12-17 21:53:08.927 [main] INFO  org.athens.network.Server - CacheBox initialized with shards
+2024-12-17 21:53:08.929 [main] INFO  org.athens.network.Server - Starting Cache Box server on port 20029 with 8 core threads
+2024-12-17 21:53:08.941 [main] INFO  org.athens.network.Server - Server started on port 20029
+2024-12-17 21:53:22.786 [Thread-0] INFO  org.athens.network.Server - Initiating server shutdown...
+2024-12-17 21:53:22.788 [Thread-0] INFO  org.athens.network.Server - Server shutdown complete
+2024-12-17 21:53:27.023 [main] INFO  org.athens.network.Server - CacheBox initialized with shards
+2024-12-17 21:53:27.025 [main] INFO  org.athens.network.Server - Starting Cache Box server on port 20029 with 8 core threads
+2024-12-17 21:53:27.040 [main] INFO  org.athens.network.Server - Server started on port 20029
+2024-12-17 21:53:28.501 [Thread-0] INFO  org.athens.network.Server - Initiating server shutdown...
+2024-12-17 21:53:28.501 [Thread-0] INFO  org.athens.network.Server - Server shutdown complete
