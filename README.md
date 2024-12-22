@@ -1,230 +1,253 @@
-# CacheBox
+# CacheBox: A Lightweight Key-Value Database for Exploratory Data Analysis
 
-A lightweight, multi-type key-value database implemented in Java with file-based persistence and an interactive CLI.
+CacheBox is a lightweight, multi-type key-value database implemented in Java, designed to simplify data storage and analysis workflows. It features file-based persistence, advanced search capabilities, and an interactive CLI for seamless data exploration. Whether you're a student learning about databases, working on small-scale data storage, prototyping, or participating in open-source projects, CacheBox provides a simple and robust solution.
 
-## Features
+---
 
-- 📦 Zero external dependencies
-- 💾 Automatic file-based persistence
-- 🔢 Multiple data type support (String, Integer, Boolean, List)
-- ⚡ Fast in-memory operations with disk backup
-- 🔄 CRUD operations (Create, Read, Update, Delete)
-- 📝 Human-readable storage format
-- 💻 Interactive command-line interface
-- 🧵 Thread-safe operations
-- 🔍 Advanced search and query capabilities
-- 🧪 Type verification and validation
-- ✅ Data Validation & Constraints (v1.2)
+## 🌟 Why Choose CacheBox?
 
-## Quick Start
+- **Learn by Building**: Ideal for students and beginners to explore key-value databases.
+- **Open Source**: Fully customizable for your projects.
+- **Lightweight & Easy-to-Use**: Runs directly from the command line with no external dependencies.
+- **Feature-Rich**: Supports multiple data types, encryption, and real-time monitoring.
 
-```java
-// Initialize the database
-CacheBox db = new CacheBox("mydata.cbx");
+---
 
-// Store different types of values
-db.put("name", CacheValue.of("John Doe"));          // String
-db.put("age", CacheValue.of(30));                   // Integer
-db.put("active", CacheValue.of(true));              // Boolean
-db.put("tags", CacheValue.of(Arrays.asList("a", "b"))); // List
-```
+## Key Features
 
-## Command Line Interface
+### ⚙️ Core Functionalities
+- **Zero External Dependencies**: CacheBox is built entirely in Java, requiring no additional libraries.
+- **Multi-Type Support**: Store data in various formats, including:
+  - `String`
+  - `Integer`
+  - `Boolean`
+  - `List`
+  - `Null`
+- **File-Based Persistence**: Automatically saves data to disk, ensuring durability across sessions.
+- **Interactive CLI**: User-friendly command-line interface for easy data management.
 
+### 🔍 Advanced Features
+- **Advanced Search**: Perform complex queries with pattern matching, range searches, and type filtering.
+- **Encryption**: Secure your data with AES, XOR, or no encryption.
+- **Sharding & Load Balancing**: Scale horizontally by distributing data across shards.
+- **Real-Time Monitoring**: Track performance metrics and visualize data in real time.
+- **Network Interface**: Access CacheBox remotely using the custom CBSP protocol.
+- **Data Validation**: Ensure data integrity with custom validation rules and type constraints.
+
+---
+
+## 🚀 Getting Started
+
+### Installation
+
+CacheBox is designed to run directly from the command line. Simply download the `cachebox.jar` file and execute it:
+
+#### Start the CLI:
 ```bash
-$ java CacheBox
-CacheBox v1.1
-Type 'help' for available commands
-
-cbox> help
-
-Available commands:
-put <type> <key> <value> - Store a value of specified type
-  Types: string, int, bool, list
-  Example: put string name John
-  Example: put int age 25
-  Example: put bool active true
-  Example: put list colors red,blue,green
-
-get <key> - Retrieve a value by key
-delete <key> - Delete a key-value pair
-list - Show all stored key-value pairs
-type <key> - Show the type of a stored value
-search [options] - Search and filter stored data
-  Options:
-    -pattern <regex>   Search by pattern
-    -range <min> <max> Search by numeric range
-    -type <type>       Filter by type (string, int, bool, list)
-help - Show this help message
-exit - Exit the program
+java -jar cachebox.jar cli
 ```
 
-## Search Functionality
-
-The new search command allows users to perform advanced queries on the stored data:
-- `-pattern <regex>`: Match keys or values using a regular expression.
-- `-range <min> <max>`: Search for numeric values within a specified range.
-- `-type <type>`: Filter results by data type (e.g., `string`, `int`, `bool`, `list`).
-
-### Example Commands
+#### Start the Server:
 ```bash
-cbox> search -pattern "na.*"
-cbox> search -range 10 50
-cbox> search -type string
+java -jar cachebox.jar server
 ```
 
-## Data Types Support
+---
 
-Currently supported types:
-- String: Text values
-- Integer: Whole numbers
-- Boolean: true/false values
-- List: Comma-separated values
-- Null: Explicit null values
+### Quick Start
 
-## Data Validation & Constraints (v1.2)
+#### Using the CLI
 
-### Validation Rules
-- **Required Fields**: You can mark specific keys as required, ensuring that the value for that key must be provided when stored.
-- **Type Validation**: CacheBox ensures that the value's type matches the type specified for that key (e.g., a string cannot be stored as an integer).
-- **Custom Validation Rules**: You can add custom validation rules such as checking the value against specific constraints (e.g., numerical ranges, regex patterns).
+1. **Start CacheBox CLI**:
+   ```bash
+   java -jar cachebox.jar cli
+   ```
 
-### Example Usage
-```java
-// Create the validation rules
-ValidationRule<Integer> ageRule = ValidationRule.forKey("age", Integer.class)
-    .required()
-    .validate(value -> value >= 0 && value <= 120);
+2. **Basic Commands**:
+   - **Store a Value**:
+     ```bash
+     db> put string name John
+     ```
+   - **Retrieve a Value**:
+     ```bash
+     db> get name
+     ```
+   - **Search for Values**:
+     ```bash
+     db> search -pattern "J.*"
+     ```
+   - **Enable Encryption**:
+     ```bash
+     db> encrypt enable
+     ```
 
-ValidationRule<String> nameRule = ValidationRule.forKey("name", String.class)
-    .required()
-    .validate(value -> value.length() > 1);
+#### Using the Server
 
-// Add rules to the manager
-ValidationManager validationManager = new ValidationManager();
-validationManager.addRule(ageRule);
-validationManager.addRule(nameRule);
+1. **Start the Server**:
+   ```bash
+   java -jar cachebox.jar server
+   ```
 
-// Example cache value to validate
-CacheValue ageValue = CacheValue.of(25);
-CacheValue nameValue = CacheValue.of("John Doe");
+2. **Connect to the Server**:
+   - Default port: `20029`
+   - Use a client or tools like `telnet` to interact:
+     ```bash
+     telnet localhost 20029
+     ```
 
-// Validate for a specific key
-ValidationResult ageValidationResult = validationManager.validate("age", ageValue);
-ValidationResult nameValidationResult = validationManager.validate("name", nameValue);
+---
 
-// Process validation results
-if (!ageValidationResult.isValid()) {
-    System.out.println(ageValidationResult.getErrorMessage());
-}
-if (!nameValidationResult.isValid()) {
-    System.out.println(nameValidationResult.getErrorMessage());
-}
+## 📊 Advanced Features
+
+### Advanced Search
+
+Perform complex queries to filter and retrieve data efficiently:
+- **Pattern Matching**:
+  ```bash
+  db> search -pattern "na.*"
+  ```
+- **Range Queries**:
+  ```bash
+  db> search -range 10 50
+  ```
+- **Type Filtering**:
+  ```bash
+  db> search -type string
+  ```
+- **Staged vs. Committed**:
+  ```bash
+  db> search -staged
+  db> search -committed
+  ```
+
+### Encryption
+
+Protect your data with built-in encryption:
+- **Enable Encryption**:
+  ```bash
+  db> encrypt enable
+  ```
+- **Set Encryption Algorithm**:
+  ```bash
+  db> encrypt set_algorithm AES
+  ```
+- **Manage Encryption Keys**:
+  ```bash
+  db> encrypt set_key my16bytekey
+  db> encrypt generate_key
+  ```
+
+### Real-Time Monitoring
+
+Stay on top of performance:
+- **Start Live Monitoring**:
+  ```bash
+  db> live_performance
+  ```
+- **Take a Snapshot**:
+  ```bash
+  db> snapshot_performance
+  ```
+- **Stop Live Monitoring**:
+  ```bash
+  db> stop_lp
+  ```
+
+### Sharding and Load Balancing
+
+Distribute data across multiple shards for enhanced performance and scalability.
+
+---
+
+## 🌍 Open Source Community
+
+### Contributing
+
+We welcome contributions from everyone! Here are some ways to get involved:
+- **Implement New Features**: Work on the roadmap or suggest your own ideas.
+- **Enhance Performance**: Optimize existing functionality.
+- **Add More Data Types**: Extend multi-type support.
+- **Improve Documentation**: Make it easier for others to learn and use CacheBox.
+- **Test and Debug**: Help us identify and resolve issues.
+
+### How to Contribute
+1. Fork the repository on GitHub.
+2. Create a new branch for your feature or fix.
+3. Submit a pull request with detailed explanations.
+
+---
+
+## 🎓 Educational Use Cases
+
+CacheBox is perfect for students and developers who want to:
+- Learn about key-value databases and their functionality.
+- Prototype small-scale applications without complex setups.
+- Explore advanced features like encryption, sharding, and monitoring.
+- Understand the basics of building a server-client protocol (CBSP).
+
+---
+
+## 🔧 Best Practices
+
+1. **Use Consistent Keys**: Avoid special characters and keep key names clear.
+2. **Choose Appropriate Types**: Match data types to the nature of your data.
+3. **Secure Data**: Enable encryption for sensitive information.
+4. **Leverage Sharding**: Scale your workload effectively.
+5. **Monitor Regularly**: Use real-time metrics to track performance.
+
+---
+
+## 🛠️ Technical Details
+
+### CBSP Protocol
+CacheBox Serialization Protocol (CBSP) ensures efficient server-client communication.
+- **Supported Commands**:
+  - `PUT`: Store a value.
+  - `GET`: Retrieve a value by key.
+  - `DELETE`: Remove a key-value pair.
+  - `SEARCH`: Perform queries.
+  - `PING`: Check server availability.
+
+#### Example Request
+```
+*3
+$3
+PUT
+$4
+name
+$4
+John
 ```
 
-### How It Works:
-- Validation rules can be added for specific keys, and CacheBox will validate data before storing it.
-- Custom validation logic can be applied through predicates for various use cases.
-- Validation is only triggered for the keys with associated rules, ensuring that your data is validated correctly.
-
-## Storage Format
-
-CacheBox uses a type-aware storage format:
+#### Example Response
 ```
-key=TYPE:value
-name=STRING:John Doe
-age=INTEGER:30
-active=BOOLEAN:true
-colors=LIST:red,blue,green
++OK
 ```
 
-## Roadmap
+### Version History
+- **2.0** (Current):
+  - Encryption, sharding, and real-time monitoring added.
+  - Network interface introduced.
+- **1.1**:
+  - Advanced search capabilities.
+- **1.0**:
+  - Multi-type support and enhanced CLI.
+- **0.1**:
+  - Initial release with basic CRUD and persistence.
 
-### Coming in v1.2
-- Data Validation & Constraints
-  - Value format validation
-  - Required fields
-  - Custom validation rules
-
-### Coming in v1.3
-- Transaction Support
-  - Atomic operations
-  - Rollback capability
-  - Operation logging
-
-### Coming in v1.4
-- Backup & Recovery
-  - Automatic backups
-  - Point-in-time recovery
-  - Import/Export
-
-## Use Cases
-
-- Application configuration storage
-- Development and testing environments
-- Small-scale data storage needs
-- Prototyping and proof of concepts
-- Educational purposes
-- Simple caching solutions
-
-## Best Practices
-
-1. **Key Naming**
-   - Use consistent naming conventions
-   - Avoid special characters
-   - Keep keys readable and meaningful
-
-2. **Data Types**
-   - Use appropriate types for values
-   - Consider using lists for related data
-   - Handle null values explicitly
-
-3. **Operations**
-   - Check value types before operations
-   - Handle exceptions appropriately
-   - Regular backups of data files
-
-4. **Search Queries**
-   - Use patterns to filter text-based data
-   - Specify ranges for numeric searches
-   - Leverage type filtering for structured data
-
-## Contributing
-
-Areas where you can help:
-- Implementing upcoming roadmap features
-- Adding more data types
-- Improving performance
-- Adding test coverage
-- Documentation improvements
-- Bug fixes
+---
 
 ## License
 
-MIT License - feel free to use this in your own projects!
+CacheBox is licensed under the MIT License, making it free and open to use for all!
 
-## Version History
-
-- **1.1 (Current)**
-  - Added advanced search and query capabilities
-  - Pattern matching, range queries, and type filtering
-  - Updated CLI to include search options
-
-- **1.0**
-  - Multi-type support (String, Integer, Boolean, List)
-  - Enhanced CLI with type commands
-  - Improved error handling
-  - Type-aware storage format
-
-- **0.1 (Initial Release)**
-  - Basic CRUD operations
-  - String-only support
-  - Simple CLI
-  - File-based persistence
+---
 
 ## Support
 
-For issues, questions, or contributions, please open an issue in the repository.
+Have questions or need help? Open an issue in the repository or reach out to the community.
 
 ---
-Made with ☕ by developers, for developers!
+
+Made with 💻 and ☕ by developers, for developers. Start exploring CacheBox today!
+
