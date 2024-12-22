@@ -1,56 +1,64 @@
 # CacheBox: A Lightweight Key-Value Database for Exploratory Data Analysis
 
-CacheBox is a lightweight, multi-type key-value database implemented in Java, designed to simplify data storage and analysis workflows. It features file-based persistence, advanced search capabilities, and an interactive CLI for seamless data exploration. Whether you're a student learning about databases, working on small-scale data storage, prototyping, or participating in open-source projects, CacheBox provides a simple and robust solution.
-
----
-
-## 🌟 Why Choose CacheBox?
-
-- **Learn by Building**: Ideal for students and beginners to explore key-value databases.
-- **Open Source**: Fully customizable for your projects.
-- **Lightweight & Easy-to-Use**: Runs directly from the command line with no external dependencies.
-- **Feature-Rich**: Supports multiple data types, encryption, and real-time monitoring.
+CacheBox is a lightweight, multi-type key-value database implemented in Java, designed to simplify your data storage and analysis workflow. It integrates file-based persistence, advanced search capabilities, and an interactive CLI for seamless data exploration. Whether you're working on small-scale data storage, prototyping, or educational purposes, CacheBox provides a robust solution for your needs.
 
 ---
 
 ## Key Features
 
-### ⚙️ Core Functionalities
-- **Zero External Dependencies**: CacheBox is built entirely in Java, requiring no additional libraries.
-- **Multi-Type Support**: Store data in various formats, including:
-  - `String`
-  - `Integer`
-  - `Boolean`
-  - `List`
-  - `Null`
-- **File-Based Persistence**: Automatically saves data to disk, ensuring durability across sessions.
-- **Interactive CLI**: User-friendly command-line interface for easy data management.
-
-### 🔍 Advanced Features
+- **Zero External Dependencies**: Built entirely in Java, CacheBox requires no additional libraries.
+- **File-Based Persistence**: Data is automatically saved to disk, ensuring durability across sessions.
+- **Multi-Type Support**: Store and retrieve data in various formats, including String, Integer, Boolean, List, and Null.
 - **Advanced Search**: Perform complex queries with pattern matching, range searches, and type filtering.
-- **Encryption**: Secure your data with AES, XOR, or no encryption.
-- **Sharding & Load Balancing**: Scale horizontally by distributing data across shards.
-- **Real-Time Monitoring**: Track performance metrics and visualize data in real time.
-- **Network Interface**: Access CacheBox remotely using the custom CBSP protocol.
+- **Interactive CLI**: A user-friendly command-line interface for managing your data.
+- **Encryption Support**: Secure your data with AES, XOR, or no encryption strategies.
+- **Sharding and Load Balancing**: Distribute data across multiple shards for better performance.
+- **Real-Time Monitoring**: Track performance metrics and visualize data with live monitoring.
 - **Data Validation**: Ensure data integrity with custom validation rules and type constraints.
+- **Network Interface and Server**: Run CacheBox as a server with a custom CBSP protocol for networked access.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Installation
 
-CacheBox is designed to run directly from the command line. Simply download the `cachebox.jar` file and execute it:
+To use CacheBox, follow these steps:
 
-#### Start the CLI:
-```bash
-java -jar cachebox.jar cli
-```
+1. Clone the repository:
 
-#### Start the Server:
-```bash
-java -jar cachebox.jar server
-```
+   ```bash
+   git clone https://github.com/enmanokatana/CacheBoxDb.git
+   ```
+
+2. Navigate to the project directory:
+
+   ```bash
+   cd cachebox
+   ```
+
+3. Build the project using Maven:
+
+   ```bash
+   mvn clean package
+   ```
+
+4. Navigate to the scripts directory:
+
+   ```bash
+   cd scripts
+   ```
+
+5. Start the CLI or server mode depending on your use case:
+
+   - To start the CLI:
+     ```bash
+     ./start-cli
+     ```
+   - To start the server:
+     ```bash
+     ./start-server
+     ```
 
 ---
 
@@ -58,157 +66,126 @@ java -jar cachebox.jar server
 
 #### Using the CLI
 
-1. **Start CacheBox CLI**:
+1. Start the CacheBox CLI:
+
    ```bash
-   java -jar cachebox.jar cli
+   ./start-cli
    ```
 
-2. **Basic Commands**:
-   - **Store a Value**:
-     ```bash
-     db> put string name John
-     ```
-   - **Retrieve a Value**:
-     ```bash
-     db> get name
-     ```
-   - **Search for Values**:
-     ```bash
-     db> search -pattern "J.*"
-     ```
-   - **Enable Encryption**:
-     ```bash
-     db> encrypt enable
-     ```
+2. Follow the on-screen instructions to interact with the database.
 
-#### Using the Server
+#### Example Commands
 
-1. **Start the Server**:
-   ```bash
-   java -jar cachebox.jar server
-   ```
+- **Store a value**:
 
-2. **Connect to the Server**:
-   - Default port: `20029`
-   - Use a client or tools like `telnet` to interact:
-     ```bash
-     telnet localhost 20029
-     ```
-
----
-
-## 📊 Advanced Features
-
-### Advanced Search
-
-Perform complex queries to filter and retrieve data efficiently:
-- **Pattern Matching**:
   ```bash
-  db> search -pattern "na.*"
-  ```
-- **Range Queries**:
-  ```bash
-  db> search -range 10 50
-  ```
-- **Type Filtering**:
-  ```bash
-  db> search -type string
-  ```
-- **Staged vs. Committed**:
-  ```bash
-  db> search -staged
-  db> search -committed
+  db> put string name John
   ```
 
-### Encryption
+- **Retrieve a value**:
 
-Protect your data with built-in encryption:
-- **Enable Encryption**:
+  ```bash
+  db> get name
+  ```
+
+- **Search for values**:
+
+  ```bash
+  db> search -pattern "J.*"
+  ```
+
+- **Enable encryption**:
+
   ```bash
   db> encrypt enable
   ```
-- **Set Encryption Algorithm**:
-  ```bash
-  db> encrypt set_algorithm AES
-  ```
-- **Manage Encryption Keys**:
-  ```bash
-  db> encrypt set_key my16bytekey
-  db> encrypt generate_key
-  ```
 
-### Real-Time Monitoring
+---
 
-Stay on top of performance:
-- **Start Live Monitoring**:
-  ```bash
-  db> live_performance
-  ```
-- **Take a Snapshot**:
-  ```bash
-  db> snapshot_performance
-  ```
-- **Stop Live Monitoring**:
-  ```bash
-  db> stop_lp
-  ```
+### Using the Server
+
+CacheBox also supports a server mode for networked access. Start the server with:
+
+```bash
+./start-server
+```
+
+The server listens on port `20029` by default. You can interact with it using the provided client or custom scripts.
+
+---
+
+## Advanced Features
+
+### Search Functionality
+
+CacheBox supports advanced search queries with the following options:
+
+- **Pattern Matching**: Use regular expressions to search keys or values.
+- **Range Queries**: Filter numeric values within a specified range.
+- **Type Filtering**: Restrict results to specific data types (e.g., String, Integer).
+- **Staged vs. Committed**: Search only staged (uncommitted) or committed data.
+
+#### Example Commands
+
+```bash
+db> search -pattern "na.*"
+db> search -range 10 50
+db> search -type string
+db> search -staged
+db> search -committed
+```
+
+---
+
+### Encryption
+
+CacheBox supports encryption for data at rest. You can enable encryption, set encryption algorithms (AES, XOR, or no encryption), and manage encryption keys.
+
+#### Example Commands
+
+```bash
+db> encrypt enable
+db> encrypt set_algorithm AES
+db> encrypt set_key my16bytekey
+db> encrypt generate_key
+```
+
+---
 
 ### Sharding and Load Balancing
 
-Distribute data across multiple shards for enhanced performance and scalability.
+CacheBox supports sharding and load balancing across multiple cache boxes. The `ShardedCacheBox` class manages multiple shards, and the `LoadBalancer` distributes requests across these shards.
 
 ---
 
-## 🌍 Open Source Community
+### Real-Time Monitoring
 
-### Contributing
+CacheBox provides real-time performance monitoring and snapshot metrics. You can start live monitoring or take a snapshot of the current performance metrics.
 
-We welcome contributions from everyone! Here are some ways to get involved:
-- **Implement New Features**: Work on the roadmap or suggest your own ideas.
-- **Enhance Performance**: Optimize existing functionality.
-- **Add More Data Types**: Extend multi-type support.
-- **Improve Documentation**: Make it easier for others to learn and use CacheBox.
-- **Test and Debug**: Help us identify and resolve issues.
+#### Example Commands
 
-### How to Contribute
-1. Fork the repository on GitHub.
-2. Create a new branch for your feature or fix.
-3. Submit a pull request with detailed explanations.
+```bash
+db> snapshot_performance
+db> live_performance
+db> stop_lp
+```
 
 ---
 
-## 🎓 Educational Use Cases
-
-CacheBox is perfect for students and developers who want to:
-- Learn about key-value databases and their functionality.
-- Prototype small-scale applications without complex setups.
-- Explore advanced features like encryption, sharding, and monitoring.
-- Understand the basics of building a server-client protocol (CBSP).
-
----
-
-## 🔧 Best Practices
-
-1. **Use Consistent Keys**: Avoid special characters and keep key names clear.
-2. **Choose Appropriate Types**: Match data types to the nature of your data.
-3. **Secure Data**: Enable encryption for sensitive information.
-4. **Leverage Sharding**: Scale your workload effectively.
-5. **Monitor Regularly**: Use real-time metrics to track performance.
-
----
-
-## 🛠️ Technical Details
+## Network Interface and Server
 
 ### CBSP Protocol
-CacheBox Serialization Protocol (CBSP) ensures efficient server-client communication.
-- **Supported Commands**:
-  - `PUT`: Store a value.
-  - `GET`: Retrieve a value by key.
-  - `DELETE`: Remove a key-value pair.
-  - `SEARCH`: Perform queries.
-  - `PING`: Check server availability.
 
-#### Example Request
+CacheBox includes a custom **CBSP (CacheBox Serialization Protocol)** for communication between the server and clients. The CBSP protocol is designed to be simple and efficient, supporting the following operations:
+
+- **PUT**: Store a value in the database.
+- **GET**: Retrieve a value by key.
+- **DELETE**: Remove a key-value pair.
+- **SEARCH**: Perform advanced queries.
+- **PING**: Check server availability.
+
+#### Example CBSP Request
+
 ```
 *3
 $3
@@ -219,35 +196,111 @@ $4
 John
 ```
 
-#### Example Response
+#### Example CBSP Response
+
 ```
 +OK
 ```
 
-### Version History
-- **2.0** (Current):
-  - Encryption, sharding, and real-time monitoring added.
-  - Network interface introduced.
-- **1.1**:
-  - Advanced search capabilities.
-- **1.0**:
-  - Multi-type support and enhanced CLI.
-- **0.1**:
-  - Initial release with basic CRUD and persistence.
+### Server Mode
+
+The CacheBox server runs on port `20029` and supports multiple client connections. It uses a thread pool to handle concurrent requests efficiently.
+
+#### Starting the Server
+
+```bash
+./start-server
+```
+
+#### Example Client Interaction
+
+You can interact with the server using a custom client or tools like `telnet`:
+
+```bash
+telnet localhost 20029
+```
+
+---
+
+## Use Cases
+
+- **Application Configuration Storage**: Store application settings and configurations.
+- **Development and Testing**: Use CacheBox for quick data storage in development environments.
+- **Small-Scale Data Storage**: Ideal for small-scale data storage needs.
+- **Prototyping and Proof of Concepts**: Quickly prototype ideas without complex setup.
+- **Educational Purposes**: Learn about key-value databases and data persistence.
+- **Simple Caching Solutions**: Use CacheBox as a lightweight caching layer.
+
+---
+
+## Best Practices
+
+1. **Key Naming**: Use consistent naming conventions and avoid special characters.
+2. **Data Types**: Use appropriate data types for values and handle null values explicitly.
+3. **Operations**: Check value types before operations and handle exceptions appropriately.
+4. **Search Queries**: Use patterns, ranges, and type filtering for structured searches.
+5. **Encryption**: Use encryption for sensitive data and manage keys securely.
+6. **Sharding**: Distribute data across multiple shards for better performance and scalability.
+7. **Monitoring**: Regularly monitor performance and take snapshots for analysis.
+
+---
+
+## Contributing
+
+We welcome contributions to CacheBox! Here are some areas where you can help:
+
+- **Implementing Features**: Work on upcoming roadmap features.
+- **Adding Data Types**: Extend support for more data types.
+- **Performance Improvements**: Optimize the database for better performance.
+- **Testing**: Add test coverage for existing and new features.
+- **Documentation**: Improve the documentation and examples.
+- **Bug Fixes**: Report and fix bugs in the repository.
 
 ---
 
 ## License
 
-CacheBox is licensed under the MIT License, making it free and open to use for all!
+CacheBox is licensed under the MIT License. Feel free to use it in your own projects!
+
+---
+
+## Version History
+
+- **2.2 (Current)**
+
+  - Added encryption support with AES, XOR, and no encryption strategies.
+  - Introduced sharding and load balancing.
+  - Added real-time performance monitoring and snapshot metrics.
+  - Enhanced CLI with encryption management and live monitoring.
+  - Added network interface and CBSP protocol for server mode.
+
+- **1.1**
+
+  - Added advanced search and query capabilities.
+  - Pattern matching, range queries, and type filtering.
+  - Updated CLI to include search options.
+
+- **1.0**
+
+  - Multi-type support (String, Integer, Boolean, List).
+  - Enhanced CLI with type commands.
+  - Improved error handling.
+  - Type-aware storage format.
+
+- **0.1 (Initial Release)**
+
+  - Basic CRUD operations.
+  - String-only support.
+  - Simple CLI.
+  - File-based persistence.
 
 ---
 
 ## Support
 
-Have questions or need help? Open an issue in the repository or reach out to the community.
+For issues, questions, or contributions, please open an issue in the repository.
 
 ---
 
-Made with 💻 and ☕ by developers, for developers. Start exploring CacheBox today!
+Made with ☕ by developers, for developers!
 
